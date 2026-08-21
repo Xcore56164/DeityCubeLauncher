@@ -2,6 +2,7 @@ package fr.deitycube.launcher.minecraft.assets;
 
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.network.HttpDownloader;
+import fr.deitycube.launcher.progress.ProgressListener;
 import fr.deitycube.launcher.util.HashUtils;
 
 import java.io.IOException;
@@ -16,6 +17,14 @@ public class MinecraftAssetInstaller {
 
     public void installAssets(
             MinecraftAssetIndex assetIndex
+    ) throws IOException {
+
+        installAssets(assetIndex, ProgressListener.NONE);
+    }
+
+    public void installAssets(
+            MinecraftAssetIndex assetIndex,
+            ProgressListener listener
     ) throws IOException {
 
         int downloaded = 0;
@@ -100,6 +109,13 @@ public class MinecraftAssetInstaller {
 
                 downloaded++;
             }
+
+            listener.update(
+                    "Vérification des assets",
+                    entry.getKey(),
+                    current,
+                    total
+            );
 
             if (current % 100 == 0
                     || current == total) {

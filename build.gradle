@@ -1,10 +1,21 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.openjfx:javafx-plugin:0.1.0'
+    }
+}
+
 plugins {
     id 'java'
     id 'application'
 }
 
+apply plugin: 'org.openjfx.javafxplugin'
+
 group = 'fr.deitycube'
-version = '1.0-SNAPSHOT'
+version = '1.0'
 
 repositories {
     mavenCentral()
@@ -17,7 +28,12 @@ java {
 }
 
 application {
-    mainClass = 'fr.deitycube.launcher.Launcher'
+    mainClass = 'fr.deitycube.launcher.ui.LauncherApp'
+}
+
+javafx {
+    version = '21.0.4'
+    modules = ['javafx.controls', 'javafx.fxml']
 }
 
 dependencies {

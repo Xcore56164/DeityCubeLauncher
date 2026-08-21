@@ -2,6 +2,7 @@ package fr.deitycube.launcher.minecraft.library;
 
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.network.HttpDownloader;
+import fr.deitycube.launcher.progress.ProgressListener;
 import fr.deitycube.launcher.util.HashUtils;
 
 import java.io.IOException;
@@ -15,11 +16,23 @@ public class MinecraftLibraryInstaller {
             List<MinecraftLibrary> libraries
     ) throws IOException {
 
+        installLibraries(libraries, ProgressListener.NONE);
+    }
+
+    public void installLibraries(
+            List<MinecraftLibrary> libraries,
+            ProgressListener listener
+    ) throws IOException {
+
         int installed = 0;
         int alreadyValid = 0;
         int ignored = 0;
+        int current = 0;
+        int total = libraries.size();
 
         for (MinecraftLibrary library : libraries) {
+
+            current++;
 
             if (!MinecraftLibraryRuleEvaluator.isAllowed(library)) {
                 ignored++;
@@ -43,6 +56,13 @@ public class MinecraftLibraryInstaller {
             System.out.println();
             System.out.println(
                     "Library : " + library.getName()
+            );
+
+            listener.update(
+                    "Installation des bibliothèques",
+                    library.getName(),
+                    current,
+                    total
             );
 
             if (isValid(destination, artifact)) {

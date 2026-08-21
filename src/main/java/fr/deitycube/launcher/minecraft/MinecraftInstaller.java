@@ -3,6 +3,7 @@ package fr.deitycube.launcher.minecraft;
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.minecraft.download.MinecraftDownload;
 import fr.deitycube.launcher.network.HttpDownloader;
+import fr.deitycube.launcher.progress.ProgressListener;
 import fr.deitycube.launcher.util.HashUtils;
 
 import java.io.IOException;
@@ -13,6 +14,14 @@ public class MinecraftInstaller {
 
     public void installClient(
             MinecraftVersionMetadata metadata
+    ) throws IOException {
+
+        installClient(metadata, ProgressListener.NONE);
+    }
+
+    public void installClient(
+            MinecraftVersionMetadata metadata,
+            ProgressListener listener
     ) throws IOException {
 
         MinecraftDownload client =
@@ -64,10 +73,18 @@ public class MinecraftInstaller {
                         + "..."
         );
 
+        listener.phase("Téléchargement du client Minecraft");
+
         HttpDownloader.downloadSha1(
                 client.getUrl(),
                 clientPath,
-                client.getSha1()
+                client.getSha1(),
+                bytes -> listener.update(
+                        "Téléchargement du client Minecraft",
+                        metadata.getId() + ".jar",
+                        bytes,
+                        client.getSize()
+                )
         );
 
         long actualSize = Files.size(clientPath);

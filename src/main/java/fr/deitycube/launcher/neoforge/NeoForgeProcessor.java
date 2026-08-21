@@ -2,6 +2,7 @@ package fr.deitycube.launcher.neoforge;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import fr.deitycube.launcher.network.HttpDownloader;
+import fr.deitycube.launcher.progress.ProgressListener;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,7 +58,19 @@ public final class NeoForgeProcessor {
     }
 
     public void prepare()
-            throws IOException, InterruptedException{
+            throws IOException, InterruptedException {
+
+        prepare(ProgressListener.NONE);
+    }
+
+    public void prepare(
+            ProgressListener listener
+    ) throws IOException, InterruptedException {
+
+        listener.indeterminate(
+                "Préparation NeoForge",
+                "Téléchargement des bibliothèques NeoForge..."
+        );
 
         List<NeoForgeLibrary> libraries =
                 readLibraries(profile);
@@ -76,8 +89,18 @@ public final class NeoForgeProcessor {
         List<NeoForgeProcessorDefinition> processors =
                 readClientProcessors();
 
+        listener.indeterminate(
+                "Préparation NeoForge",
+                "Téléchargement des dépendances des processors..."
+        );
+
         downloadProcessorDependencies(
                 processors
+        );
+
+        listener.indeterminate(
+                "Préparation NeoForge",
+                "Application des post-traitements NeoForge..."
         );
 
         System.out.println();

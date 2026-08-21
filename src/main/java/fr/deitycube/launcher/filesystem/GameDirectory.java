@@ -47,6 +47,10 @@ public final class GameDirectory {
         return getRootDirectory().resolve("logs");
     }
 
+    public static Path getSettingsFile() {
+        return getRootDirectory().resolve("settings.json");
+    }
+
     public static Path getMinecraftVersionDirectory(String version) {
         return getVersionsDirectory().resolve(version);
     }

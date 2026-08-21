@@ -126,6 +126,101 @@ public final class MicrosoftTokenService {
         );
     }
 
+    public static MicrosoftTokenResponse refreshToken(
+            String refreshToken
+    ) throws IOException, InterruptedException {
+
+        String body =
+                "client_id=" + encode(
+                        MicrosoftAuthConfig.CLIENT_ID
+                )
+                        + "&grant_type=refresh_token"
+                        + "&refresh_token=" + encode(
+                        refreshToken
+                )
+                        + "&scope=" + encode(
+                        MicrosoftAuthConfig.SCOPE
+                );
+
+        HttpRequest request =
+                HttpRequest.newBuilder()
+                        .uri(URI.create(
+                                MicrosoftAuthConfig.TOKEN_URL
+                        ))
+                        .header(
+                                "Content-Type",
+                                "application/x-www-form-urlencoded"
+                        )
+                        .POST(
+                                HttpRequest.BodyPublishers.ofString(
+                                        body
+                                )
+                        )
+                        .build();
+
+        HttpResponse<String> response =
+                HTTP_CLIENT.send(
+                        request,
+                        HttpResponse.BodyHandlers.ofString()
+                );
+
+        JsonNode json =
+                OBJECT_MAPPER.readTree(
+                        response.body()
+                );
+
+        if (response.statusCode() != 200) {
+
+            String error =
+                    json.path("error").asText(
+                            "unknown_error"
+                    );
+
+            String description =
+                    json.path("error_description").asText(
+                            "Aucune description."
+                    );
+
+            throw new IOException(
+                    "Echec du rafraichissement du token Microsoft : "
+                            + error
+                            + " - "
+                            + description
+            );
+        }
+
+        String accessToken =
+                json.path("access_token").asText(null);
+
+        String newRefreshToken =
+                json.path("refresh_token").asText(refreshToken);
+
+        String tokenType =
+                json.path("token_type").asText(null);
+
+        String scope =
+                json.path("scope").asText(null);
+
+        long expiresIn =
+                json.path("expires_in").asLong(0);
+
+        if (accessToken == null
+                || accessToken.isBlank()) {
+
+            throw new IOException(
+                    "Microsoft n'a pas fourni d'access_token."
+            );
+        }
+
+        return new MicrosoftTokenResponse(
+                accessToken,
+                newRefreshToken,
+                tokenType,
+                scope,
+                expiresIn
+        );
+    }
+
     private static String encode(String value) {
 
         return URLEncoder.encode(

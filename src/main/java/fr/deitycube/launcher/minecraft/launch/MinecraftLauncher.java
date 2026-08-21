@@ -13,6 +13,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,10 +27,11 @@ public final class MinecraftLauncher {
     private static final String LAUNCHER_VERSION =
             LauncherConfig.MODPACK_VERSION;
 
-    public void launch(
+    public Process launch(
             MinecraftResolvedVersion resolvedVersion,
-            AuthenticationResult authentication
-    ) throws IOException, InterruptedException {
+            AuthenticationResult authentication,
+            int allocatedRamMb
+    ) throws IOException {
 
         MinecraftLaunchConfiguration configuration =
                 createConfiguration(
@@ -39,7 +42,8 @@ public final class MinecraftLauncher {
                 buildCommand(
                         configuration,
                         resolvedVersion,
-                        authentication
+                        authentication,
+                        allocatedRamMb
                 );
 
         printLaunchInformation(
@@ -58,21 +62,35 @@ public final class MinecraftLauncher {
                         .toFile()
         );
 
-        processBuilder.inheritIO();
+        Path logFile = createLogFile();
 
-        Process process =
-                processBuilder.start();
+        processBuilder.redirectOutput(
+                ProcessBuilder.Redirect.to(logFile.toFile())
+        );
 
-        int exitCode =
-                process.waitFor();
+        processBuilder.redirectErrorStream(true);
 
-        if (exitCode != 0) {
+        return processBuilder.start();
+    }
 
-            throw new IOException(
-                    "Minecraft s'est terminé avec le code "
-                            + exitCode
-            );
-        }
+    private Path createLogFile() throws IOException {
+
+        Files.createDirectories(
+                GameDirectory.getLogsDirectory()
+        );
+
+        String fileName =
+                "game-"
+                        + LocalDateTime.now().format(
+                                DateTimeFormatter.ofPattern(
+                                        "yyyy-MM-dd_HH-mm-ss"
+                                )
+                        )
+                        + ".log";
+
+        return GameDirectory
+                .getLogsDirectory()
+                .resolve(fileName);
     }
 
     private MinecraftLaunchConfiguration createConfiguration(
@@ -106,7 +124,8 @@ public final class MinecraftLauncher {
     private List<String> buildCommand(
             MinecraftLaunchConfiguration configuration,
             MinecraftResolvedVersion resolvedVersion,
-            AuthenticationResult authentication
+            AuthenticationResult authentication,
+            int allocatedRamMb
     ) throws IOException {
 
         String classpath =
@@ -156,6 +175,14 @@ public final class MinecraftLauncher {
 
         command.add(
                 getJavaExecutable()
+        );
+
+        command.add(
+                "-Xmx" + allocatedRamMb + "M"
+        );
+
+        command.add(
+                "-Xms" + Math.min(allocatedRamMb, 1024) + "M"
         );
 
         command.addAll(

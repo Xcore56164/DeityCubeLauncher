@@ -2,7 +2,9 @@ package fr.deitycube.launcher.neoforge;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fr.deitycube.launcher.config.LauncherConfig;
 import fr.deitycube.launcher.network.HttpDownloader;
+import fr.deitycube.launcher.progress.ProgressListener;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,18 +15,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 public final class NeoForgeInstaller {
-
-    private static final String MINECRAFT_VERSION =
-            "1.21.1";
-
-    private static final String NEOFORGE_VERSION =
-            "21.1.248";
-
-    private static final String NEOFORGE_MAVEN_URL =
-            "https://maven.neoforged.net/releases/"
-                    + "net/neoforged/neoforge/"
-                    + NEOFORGE_VERSION
-                    + "/";
 
     private static final ObjectMapper OBJECT_MAPPER =
             new ObjectMapper();
@@ -41,13 +31,20 @@ public final class NeoForgeInstaller {
     public Path downloadInstaller()
             throws IOException, InterruptedException {
 
+        return downloadInstaller(ProgressListener.NONE);
+    }
+
+    public Path downloadInstaller(
+            ProgressListener listener
+    ) throws IOException, InterruptedException {
+
         String fileName =
                 "neoforge-"
-                        + NEOFORGE_VERSION
+                        + LauncherConfig.NEOFORGE_VERSION
                         + "-installer.jar";
 
         String url =
-                NEOFORGE_MAVEN_URL
+                neoForgeMavenUrl()
                         + fileName;
 
         Path destination =
@@ -69,12 +66,12 @@ public final class NeoForgeInstaller {
 
         System.out.println(
                 "Minecraft : "
-                        + MINECRAFT_VERSION
+                        + LauncherConfig.MINECRAFT_VERSION
         );
 
         System.out.println(
                 "NeoForge : "
-                        + NEOFORGE_VERSION
+                        + LauncherConfig.NEOFORGE_VERSION
         );
 
         if (Files.exists(destination)) {
@@ -99,13 +96,29 @@ public final class NeoForgeInstaller {
                         + expectedSha256
         );
 
+        listener.phase("Téléchargement de l'installeur NeoForge");
+
         HttpDownloader.downloadSha256(
                 url,
                 destination,
-                expectedSha256
+                expectedSha256,
+                bytes -> listener.update(
+                        "Téléchargement de l'installeur NeoForge",
+                        fileName,
+                        bytes,
+                        -1
+                )
         );
 
         return destination;
+    }
+
+    private String neoForgeMavenUrl() {
+
+        return "https://maven.neoforged.net/releases/"
+                + "net/neoforged/neoforge/"
+                + LauncherConfig.NEOFORGE_VERSION
+                + "/";
     }
 
     private String downloadSha256(
@@ -113,7 +126,7 @@ public final class NeoForgeInstaller {
     ) throws IOException {
 
         String hashUrl =
-                NEOFORGE_MAVEN_URL
+                neoForgeMavenUrl()
                         + fileName
                         + ".sha256";
 
