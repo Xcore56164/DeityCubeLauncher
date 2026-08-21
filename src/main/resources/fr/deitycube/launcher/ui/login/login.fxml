@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane prefWidth="480" prefHeight="600"
+           stylesheets="@../app.css"
+           xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml"
+           fx:controller="fr.deitycube.launcher.ui.login.LoginController">
+
+    <VBox styleClass="card" alignment="CENTER" spacing="18" maxWidth="360">
+        <Label text="DeityCube" styleClass="title-label"/>
+        <Label text="Connecte-toi pour accéder au launcher" styleClass="subtitle-label"
+               wrapText="true"/>
+
+        <VBox spacing="8" alignment="CENTER_LEFT">
+            <Label text="PSEUDO HORS-LIGNE" styleClass="section-label"/>
+            <TextField fx:id="usernameField" promptText="Ton pseudo"/>
+            <Button fx:id="offlineLoginButton" text="Se connecter en mode hors-ligne"
+                    styleClass="secondary-button" maxWidth="Infinity"
+                    onAction="#onOfflineLogin"/>
+        </VBox>
+
+        <Label text="ou" styleClass="subtitle-label"/>
+
+        <Button fx:id="microsoftLoginButton" text="Se connecter avec Microsoft"
+                styleClass="primary-button" maxWidth="Infinity"
+                onAction="#onMicrosoftLogin"/>
+
+        <CheckBox fx:id="rememberMeCheckbox" text="Se souvenir de moi"
+                   selected="true"/>
+
+        <ProgressIndicator fx:id="loadingIndicator" visible="false" progress="-1"
+                            maxWidth="28" maxHeight="28"/>
+
+        <Label fx:id="statusLabel" styleClass="status-label" wrapText="true"
+               textAlignment="CENTER"/>
+
+        <padding>
+            <Insets top="8" bottom="8"/>
+        </padding>
+    </VBox>
+
+</StackPane>

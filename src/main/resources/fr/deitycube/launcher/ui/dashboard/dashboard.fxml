@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane prefWidth="640" prefHeight="620"
+            stylesheets="@../app.css"
+            xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="fr.deitycube.launcher.ui.dashboard.DashboardController">
+
+    <top>
+        <HBox alignment="CENTER_LEFT" spacing="12">
+            <padding>
+                <Insets top="20" right="24" bottom="0" left="24"/>
+            </padding>
+
+            <VBox spacing="2">
+                <Label text="DeityCube" styleClass="title-label"/>
+                <Label fx:id="welcomeLabel" styleClass="subtitle-label"/>
+            </VBox>
+
+            <Region HBox.hgrow="ALWAYS"/>
+
+            <Button text="Dossier du jeu" styleClass="link-button"
+                    onAction="#onOpenGameFolder"/>
+            <Button text="Logs" styleClass="link-button"
+                    onAction="#onOpenLogsFolder"/>
+            <Button text="Se déconnecter" styleClass="link-button"
+                    onAction="#onLogout"/>
+        </HBox>
+    </top>
+
+    <center>
+        <VBox styleClass="card" spacing="20" alignment="TOP_CENTER" maxWidth="560">
+            <BorderPane.margin>
+                <Insets top="20" right="24" bottom="0" left="24"/>
+            </BorderPane.margin>
+
+            <Label fx:id="versionInfoLabel" styleClass="pill" text="Chargement..."/>
+
+            <HBox spacing="24">
+                <VBox spacing="8" HBox.hgrow="ALWAYS">
+                    <Label text="PROFIL DE MODPACK" styleClass="section-label"/>
+                    <ComboBox fx:id="profileComboBox" maxWidth="Infinity"/>
+                </VBox>
+
+                <VBox spacing="8" HBox.hgrow="ALWAYS">
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label text="RAM ALLOUÉE" styleClass="section-label"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Label fx:id="ramValueLabel" styleClass="value-label"/>
+                    </HBox>
+                    <Slider fx:id="ramSlider" majorTickUnit="1024" minorTickCount="0"
+                            snapToTicks="false"/>
+                </VBox>
+            </HBox>
+
+            <CheckBox fx:id="closeLauncherCheckbox"
+                      text="Fermer le launcher pendant que le jeu tourne"/>
+
+            <HBox spacing="12" alignment="CENTER">
+                <Button fx:id="reinstallButton" text="Réinstaller"
+                        styleClass="danger-button" onAction="#onReinstall"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button fx:id="playButton" text="Jouer" styleClass="primary-button"
+                        onAction="#onPlay"/>
+            </HBox>
+
+            <VBox spacing="6">
+                <ProgressBar fx:id="progressBar" progress="0" maxWidth="Infinity"/>
+                <HBox spacing="8">
+                    <Label fx:id="phaseLabel" styleClass="value-label"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="detailLabel" styleClass="subtitle-label"/>
+                </HBox>
+            </VBox>
+        </VBox>
+    </center>
+
+</BorderPane>
