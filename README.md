@@ -4,13 +4,19 @@
 
 # DeityCube Launcher
 
-Official launcher for the **DeityCube** Minecraft modpack. It handles sign-in (Microsoft
+Official launcher for the **DeityCube** Minecraft server. It handles sign-in (Microsoft
 account or offline), automatically downloads and installs Minecraft, NeoForge and the modpack,
 then launches the game — no manual file handling required.
 
+> **Note on offline sign-in**: offline authentication is a **temporary** measure only,
+> tolerated while DeityCube awaits authorization from Minecraft Services to use their
+> authentication API. It is not a permanent feature: it will be removed once that
+> authorization is obtained, at which point Microsoft sign-in will become mandatory.
+
 ## Features
 
-- **Microsoft** sign-in (OAuth/PKCE flow + Xbox Live/XSTS) or **offline** profile.
+- **Microsoft** sign-in (OAuth/PKCE flow + Xbox Live/XSTS), or a **temporary offline** profile
+  (see note above — pending Minecraft Services API authorization).
 - Automatic install and repair of Minecraft, NeoForge and the DeityCube modpack (every
   downloaded file is verified against a SHA-1/SHA-256 checksum).
 - Multiple modpack profiles to choose from (server-defined via the DeityCube manifest).
@@ -58,19 +64,6 @@ Requirements: JDK 21 (resolved automatically via the Gradle toolchain).
 ./gradlew run      # run the launcher in development mode
 ./gradlew build    # compile and run the tests
 ```
-
-### Building the Windows installer
-
-```bash
-./gradlew createInstaller
-```
-
-Requires [WiX Toolset](https://wixtoolset.org/) (v3.x, `candle`/`light`) installed and on the
-`PATH`. The generated `.exe` installer is placed in `build/jpackage/`.
-
-> **Important**: the `--win-upgrade-uuid` GUID defined in `build.gradle` (the
-> `createInstaller` task) must never change between versions — it is what allows a silent
-> update to replace the existing installation instead of creating a new one alongside it.
 
 ## License
 
