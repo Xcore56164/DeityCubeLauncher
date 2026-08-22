@@ -58,15 +58,20 @@ processResources {
     }
 }
 
-tasks.register('createInstaller', Exec) {
+tasks.register('createInstaller') {
     group = 'distribution'
-    description = 'Génère un installeur Windows (.exe) via jpackage. Nécessite WiX Toolset (candle/light) sur le PATH.'
+    description = 'Génère les installeurs natifs (Windows .exe via WiX, Linux .deb/.rpm) via jpackage.'
 
     dependsOn tasks.named('installDist')
 
+    def currentOs = org.gradle.internal.os.OperatingSystem.current()
+
     def installDir = layout.buildDirectory.dir("install/${project.name}/lib")
     def outputDir = layout.buildDirectory.dir('jpackage')
-    def jpackageExecutable = "${System.getProperty('java.home')}/bin/jpackage.exe"
+    def jpackageBin = "${System.getProperty('java.home')}/bin/jpackage" + (currentOs.isWindows() ? '.exe' : '')
+
+    def winIconFile = file('src/main/resources/fr/deitycube/launcher/ui/assets/logo.ico')
+    def linuxIconFile = file('src/main/resources/fr/deitycube/launcher/ui/assets/logo.png')
 
     // GUID fixe utilisé par WiX pour reconnaître les installations d'une même app.
     // NE JAMAIS LE CHANGER entre deux versions : c'est ce qui permet à une mise à jour
@@ -74,30 +79,69 @@ tasks.register('createInstaller', Exec) {
     // d'en créer une nouvelle à côté.
     def winUpgradeUuid = '5B1F3E6B-6C1E-4B0E-9C7A-2B7B7E9C7D1A'
 
-    doFirst {
-        if (!org.gradle.internal.os.OperatingSystem.current().isWindows()) {
-            throw new GradleException("'createInstaller' ne fonctionne que sur Windows (jpackage --type exe + WiX).")
-        }
-        outputDir.get().asFile.mkdirs()
-    }
+    // Nom de paquet Debian : doit être en minuscules, contrairement à project.name.
+    def linuxPackageName = 'deitycubelauncher'
 
-    commandLine(
-            jpackageExecutable,
-            '--type', 'exe',
-            '--input', installDir.get().asFile.absolutePath,
-            '--dest', outputDir.get().asFile.absolutePath,
-            '--name', project.name,
-            '--main-jar', "${project.name}-${project.version}.jar",
-            '--main-class', 'fr.deitycube.launcher.ui.LauncherApp',
-            '--app-version', project.version.toString(),
-            '--vendor', 'DeityCube',
-            '--description', 'Official launcher for the DeityCube modpack',
-            '--copyright', "Copyright (c) ${new Date().format('yyyy')} DeityCube",
-            '--license-file', file('LICENSE').absolutePath,
-            '--win-per-user-install',
-            '--win-dir-chooser',
-            '--win-menu',
-            '--win-shortcut',
-            '--win-upgrade-uuid', winUpgradeUuid
-    )
+    // Adresse de contact publique visible dans les métadonnées du .deb (dpkg -I) —
+    // à remplacer par une vraie adresse de support avant publication.
+    def linuxMaintainer = 'DeityCube <deitycube@gmail.com>'
+
+    doLast {
+
+        outputDir.get().asFile.mkdirs()
+
+        def commonArgs = [
+                '--input', installDir.get().asFile.absolutePath,
+                '--dest', outputDir.get().asFile.absolutePath,
+                '--name', project.name,
+                '--main-jar', "${project.name}-${project.version}.jar",
+                '--main-class', 'fr.deitycube.launcher.ui.LauncherApp',
+                '--app-version', project.version.toString(),
+                '--vendor', 'DeityCube',
+                '--description', 'Official launcher for the DeityCube modpack',
+                '--copyright', "Copyright (c) ${new Date().format('yyyy')} DeityCube",
+                '--license-file', file('LICENSE').absolutePath
+        ]
+
+        if (currentOs.isWindows()) {
+
+            def args = [jpackageBin, '--type', 'exe'] + commonArgs + [
+                    '--win-per-user-install',
+                    '--win-dir-chooser',
+                    '--win-menu',
+                    '--win-shortcut',
+                    '--win-upgrade-uuid', winUpgradeUuid
+            ]
+
+            if (winIconFile.exists()) {
+                args += ['--icon', winIconFile.absolutePath]
+            }
+
+            exec { commandLine(args) }
+
+        } else if (currentOs.isLinux()) {
+
+            ['deb', 'rpm'].each { type ->
+
+                def args = [jpackageBin, '--type', type] + commonArgs + [
+                        '--linux-package-name', linuxPackageName,
+                        '--linux-shortcut',
+                        '--linux-app-category', 'games'
+                ]
+
+                if (type == 'deb') {
+                    args += ['--linux-deb-maintainer', linuxMaintainer]
+                }
+
+                if (linuxIconFile.exists()) {
+                    args += ['--icon', linuxIconFile.absolutePath]
+                }
+
+                exec { commandLine(args) }
+            }
+
+        } else {
+            throw new GradleException("'createInstaller' ne prend en charge que Windows et Linux pour l'instant.")
+        }
+    }
 }

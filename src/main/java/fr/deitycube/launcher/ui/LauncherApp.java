@@ -3,6 +3,7 @@ package fr.deitycube.launcher.ui;
 import fr.deitycube.launcher.auth.AuthenticationResult;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.logging.LauncherLogger;
+import fr.deitycube.launcher.minecraft.platform.OperatingSystem;
 import fr.deitycube.launcher.progress.InstallationPipeline;
 import fr.deitycube.launcher.settings.LauncherSettings;
 import fr.deitycube.launcher.settings.LauncherSettingsStore;
@@ -410,6 +411,8 @@ public final class LauncherApp extends Application {
 
     private void promptLauncherUpdate(LauncherUpdateManifest update) {
 
+        boolean assistedInstall = OperatingSystem.current() == OperatingSystem.LINUX;
+
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Mise à jour disponible");
         alert.setHeaderText("DeityCube Launcher " + update.getVersion() + " est disponible");
@@ -417,7 +420,10 @@ public final class LauncherApp extends Application {
                 (update.getNotes() != null && !update.getNotes().isBlank()
                         ? update.getNotes() + "\n\n"
                         : "")
-                        + "Voulez-vous l'installer maintenant ? Le launcher redémarrera automatiquement."
+                        + "Voulez-vous l'installer maintenant ? "
+                        + (assistedInstall
+                                ? "Le gestionnaire de paquets de votre système s'ouvrira pour terminer l'installation."
+                                : "Le launcher redémarrera automatiquement.")
         );
 
         alert.showAndWait()
@@ -427,21 +433,40 @@ public final class LauncherApp extends Application {
 
     private void runLauncherUpdate(LauncherUpdateManifest update) {
 
-        Task<Void> task = new Task<>() {
+        Task<Boolean> task = new Task<>() {
             @Override
-            protected Void call() throws Exception {
+            protected Boolean call() throws Exception {
 
-                new LauncherUpdater().downloadAndApply(update, (phase, detail, current, total) -> {
+                return new LauncherUpdater().downloadAndApply(update, (phase, detail, current, total) -> {
                     updateTitle(phase);
                     updateMessage(detail);
                     updateProgress(-1, 1);
                 });
-
-                return null;
             }
         };
 
         Stage progressDialog = showUpdateProgressDialog(task);
+
+        // Sur Windows, downloadAndApply() ne revient jamais en cas de succès : l'installeur
+        // redémarre déjà le launcher et le processus courant se termine avant onSucceeded.
+        // Sur Linux, elle revient (installation déléguée au gestionnaire de paquets graphique),
+        // donc on informe l'utilisateur de terminer manuellement.
+        task.setOnSucceeded(event -> {
+
+            progressDialog.close();
+
+            if (Boolean.FALSE.equals(task.getValue())) {
+
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Mise à jour");
+                alert.setHeaderText("Terminez l'installation");
+                alert.setContentText(
+                        "Le paquet a été téléchargé et ouvert avec votre gestionnaire de paquets. "
+                                + "Terminez l'installation puis relancez DeityCube Launcher."
+                );
+                alert.showAndWait();
+            }
+        });
 
         task.setOnFailed(event -> {
             progressDialog.close();
@@ -453,7 +478,7 @@ public final class LauncherApp extends Application {
         thread.start();
     }
 
-    private Stage showUpdateProgressDialog(Task<Void> task) {
+    private Stage showUpdateProgressDialog(Task<Boolean> task) {
 
         Label titleLabel = new Label("Mise à jour du launcher...");
         titleLabel.getStyleClass().add("welcome-label");

@@ -13,13 +13,11 @@ public final class LauncherConfig {
             "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 
     public static final String DEITYCUBE_MANIFEST_URL =
-            "https://deitycube.fr/downloads/manifest_deitycube.json";
+            "https://deitycube.fr/downloads/deitycube_manifest.json";
 
     public static final String LAUNCHER_UPDATE_MANIFEST_URL =
             "https://deitycube.fr/downloads/launcher_manifest.json";
 
-    // Doit correspondre au --name utilisé par la tâche Gradle 'createInstaller' (jpackage),
-    // puisque c'est le nom du dossier d'installation sous %LOCALAPPDATA%.
     public static final String LAUNCHER_INSTALL_NAME = "DeityCubeLauncher";
 
     public static final String DEFAULT_MODPACK_PROFILE =

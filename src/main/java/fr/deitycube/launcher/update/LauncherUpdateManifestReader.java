@@ -19,30 +19,12 @@ public final class LauncherUpdateManifestReader {
         LauncherUpdateManifest manifest =
                 OBJECT_MAPPER.readValue(manifestJson, LauncherUpdateManifest.class);
 
-        validate(manifest);
+        if (manifest.getVersion() == null || manifest.getVersion().isBlank()) {
+            throw new IOException(
+                    "Champ 'version' absent du manifeste de mise à jour du launcher."
+            );
+        }
 
         return manifest;
-    }
-
-    private static void validate(LauncherUpdateManifest manifest) throws IOException {
-
-        requireText(manifest.getVersion(), "version");
-        requireText(manifest.getInstallerUrl(), "installer_url");
-        requireText(manifest.getSha256(), "sha256");
-
-        if (!manifest.getInstallerUrl().startsWith("https://")) {
-            throw new IOException(
-                    "Le champ 'installer_url' du manifeste de mise à jour doit être en HTTPS."
-            );
-        }
-    }
-
-    private static void requireText(String value, String fieldName) throws IOException {
-
-        if (value == null || value.isBlank()) {
-            throw new IOException(
-                    "Champ '" + fieldName + "' absent du manifeste de mise à jour du launcher."
-            );
-        }
     }
 }

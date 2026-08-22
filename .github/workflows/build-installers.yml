@@ -1,0 +1,79 @@
+name: Build installers
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch: {}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # windows-latest embarque WiX Toolset (requis par jpackage --type exe) mais son dossier
+      # bin/ n'est pas forcément déjà sur le PATH.
+      - name: Add WiX Toolset to PATH
+        shell: pwsh
+        run: echo "$env:WIX\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build Windows installer
+        run: ./gradlew.bat createInstaller --no-daemon
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: build/jpackage/*.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # dpkg-deb (.deb) est déjà présent sur ce runner ; rpmbuild (.rpm) ne l'est pas.
+      - name: Install RPM packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot
+
+      - name: Build Linux installers
+        run: ./gradlew createInstaller --no-daemon
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-installers
+          path: |
+            build/jpackage/*.deb
+            build/jpackage/*.rpm
+          if-no-files-found: error
+
+  release:
+    needs: [windows, linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/windows-installer/*.exe
+            artifacts/linux-installers/*.deb
+            artifacts/linux-installers/*.rpm

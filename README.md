@@ -22,30 +22,48 @@ then launches the game — no manual file handling required.
 - Multiple modpack profiles to choose from (server-defined via the DeityCube manifest).
 - Adjustable allocated RAM, option to keep the launcher open while the game is running.
 - **Built-in self-update**: the launcher checks for a new version on startup and offers to
-  install it (download verified by SHA-256, silent installation, automatic restart).
+  install it (download verified by SHA-256). On Windows this is fully silent with an automatic
+  restart; on Linux the downloaded `.deb`/`.rpm` is handed off to your system's package manager,
+  which will ask for your password to finish the install.
 - Dedicated **logs** for every run (launcher and game), viewable directly from the launcher
   settings.
 
 ## Installation
 
-1. Download the latest installer (`DeityCubeLauncher-x.y.z.exe`) from
-   [deitycube.fr](https://deitycube.fr).
-2. Run the installer and follow the wizard (per-user install, no administrator rights
-   required).
-3. Launch DeityCube Launcher from the Start menu or the desktop shortcut.
+Download the latest installer for your platform from [deitycube.fr](https://deitycube.fr).
 
-The required Java runtime is bundled with the installer: no separate Java installation is
-needed.
+**Windows** — run `DeityCubeLauncher-x.y.z.exe` and follow the wizard (per-user install, no
+administrator rights required). Launch from the Start menu or desktop shortcut.
+
+**Linux** — download the `.deb` (Debian/Ubuntu-based) or `.rpm` (Fedora/RHEL-based) package
+matching your distribution and install it with your package manager, e.g.:
+
+```bash
+sudo apt install ./deitycubelauncher_x.y.z_amd64.deb   # Debian/Ubuntu
+sudo dnf install ./deitycubelauncher-x.y.z.x86_64.rpm  # Fedora/RHEL
+```
+
+A menu entry is created automatically. The required Java runtime is bundled with every
+installer: no separate Java installation is needed on either platform.
 
 ## Updating
 
 The launcher automatically checks whether a new version is available every time it starts. If
-one is found, it asks for confirmation before downloading and installing the update; the
-launcher then restarts on its own on the new version.
+one is found, it asks for confirmation before downloading it.
+
+- **Windows**: the update installs silently and the launcher restarts on its own.
+- **Linux**: since installing a `.deb`/`.rpm` requires root privileges, the downloaded package
+  is opened with your desktop's package manager (GNOME Software, Discover...) instead — approve
+  the installation there, then relaunch DeityCube Launcher yourself.
 
 ## Data and logs
 
-All launcher data is stored under `%APPDATA%\DeityCube`:
+All launcher data is stored in a single per-user folder:
+
+| OS      | Location                              |
+|---------|----------------------------------------|
+| Windows | `%APPDATA%\DeityCube`                  |
+| Linux   | `$XDG_DATA_HOME/DeityCube` (defaults to `~/.local/share/DeityCube`) |
 
 | Folder/file      | Contents                                                        |
 |-------------------|------------------------------------------------------------------|
@@ -64,6 +82,48 @@ Requirements: JDK 21 (resolved automatically via the Gradle toolchain).
 ./gradlew run      # run the launcher in development mode
 ./gradlew build    # compile and run the tests
 ```
+
+### Building installers
+
+```bash
+./gradlew createInstaller
+```
+
+This produces the installer(s) for whichever OS it runs on — `jpackage` cannot cross-compile,
+so a `.exe` must be built on Windows and `.deb`/`.rpm` on Linux. Requirements:
+
+- **Windows**: [WiX Toolset](https://wixtoolset.org/) v3.x (`candle`/`light`) on the `PATH`.
+- **Linux**: `rpm` and `fakeroot` packages installed (`dpkg-deb` for `.deb` is normally already
+  present on Debian-based systems).
+
+[.github/workflows/build-installers.yml](.github/workflows/build-installers.yml) builds both
+automatically on GitHub Actions (Windows + Linux runners) and attaches the artifacts to a
+GitHub Release whenever a `v*.*.*` tag is pushed:
+
+```bash
+git tag v1.1.0
+git push --tags
+```
+
+### Update manifest format
+
+The self-update system (`LauncherUpdater`) reads a JSON manifest from the URL configured as
+`LAUNCHER_UPDATE_MANIFEST_URL` in `LauncherConfig`, one platform key per supported target:
+
+```json
+{
+  "version": "1.1.0",
+  "notes": "What's new in this release.",
+  "windows":   { "installer_url": "https://deitycube.fr/downloads/DeityCubeLauncher-1.1.0.exe", "sha256": "..." },
+  "linux_deb": { "installer_url": "https://deitycube.fr/downloads/deitycubelauncher_1.1.0_amd64.deb", "sha256": "..." },
+  "linux_rpm": { "installer_url": "https://deitycube.fr/downloads/deitycubelauncher-1.1.0.x86_64.rpm", "sha256": "..." }
+}
+```
+
+A platform key can be omitted if that build isn't ready yet — users on that platform simply
+won't be offered the update until it's added. `sha256` is the checksum of the corresponding
+installer file (e.g. `sha256sum file` on Linux, `Get-FileHash file -Algorithm SHA256` on
+Windows).
 
 ## License
 
