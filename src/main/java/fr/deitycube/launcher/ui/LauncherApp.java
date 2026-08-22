@@ -2,11 +2,14 @@ package fr.deitycube.launcher.ui;
 
 import fr.deitycube.launcher.auth.AuthenticationResult;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
+import fr.deitycube.launcher.logging.LauncherLogger;
 import fr.deitycube.launcher.progress.InstallationPipeline;
 import fr.deitycube.launcher.settings.LauncherSettings;
 import fr.deitycube.launcher.settings.LauncherSettingsStore;
 import fr.deitycube.launcher.ui.dashboard.DashboardController;
 import fr.deitycube.launcher.ui.login.LoginController;
+import fr.deitycube.launcher.update.LauncherUpdateManifest;
+import fr.deitycube.launcher.update.LauncherUpdater;
 import javafx.animation.FadeTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -18,17 +21,23 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.image.Image;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.media.MediaView;
 import javafx.scene.shape.Rectangle;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import javafx.util.Duration;
 
 import java.awt.Desktop;
@@ -56,6 +65,11 @@ public final class LauncherApp extends Application {
     }
 
     @Override
+    public void init() {
+        LauncherLogger.initialize();
+    }
+
+    @Override
     public void start(Stage primaryStage) {
 
         this.stage = primaryStage;
@@ -80,6 +94,7 @@ public final class LauncherApp extends Application {
 
         showLogin();
         loadManifest();
+        checkForLauncherUpdate();
 
         primaryStage.show();
     }
@@ -361,5 +376,122 @@ public final class LauncherApp extends Application {
 
     public void setAuthentication(AuthenticationResult authentication) {
         this.authentication = authentication;
+    }
+
+    private void checkForLauncherUpdate() {
+
+        Task<LauncherUpdateManifest> task = new Task<>() {
+            @Override
+            protected LauncherUpdateManifest call() throws Exception {
+                return new LauncherUpdater().checkForUpdate();
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+
+            LauncherUpdateManifest update = task.getValue();
+
+            if (update != null) {
+                promptLauncherUpdate(update);
+            }
+        });
+
+        task.setOnFailed(event ->
+                System.err.println(
+                        "Vérification de mise à jour du launcher impossible : "
+                                + task.getException()
+                )
+        );
+
+        Thread thread = new Thread(task, "update-check");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void promptLauncherUpdate(LauncherUpdateManifest update) {
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Mise à jour disponible");
+        alert.setHeaderText("DeityCube Launcher " + update.getVersion() + " est disponible");
+        alert.setContentText(
+                (update.getNotes() != null && !update.getNotes().isBlank()
+                        ? update.getNotes() + "\n\n"
+                        : "")
+                        + "Voulez-vous l'installer maintenant ? Le launcher redémarrera automatiquement."
+        );
+
+        alert.showAndWait()
+                .filter(button -> button == ButtonType.OK)
+                .ifPresent(button -> runLauncherUpdate(update));
+    }
+
+    private void runLauncherUpdate(LauncherUpdateManifest update) {
+
+        Task<Void> task = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+
+                new LauncherUpdater().downloadAndApply(update, (phase, detail, current, total) -> {
+                    updateTitle(phase);
+                    updateMessage(detail);
+                    updateProgress(-1, 1);
+                });
+
+                return null;
+            }
+        };
+
+        Stage progressDialog = showUpdateProgressDialog(task);
+
+        task.setOnFailed(event -> {
+            progressDialog.close();
+            showUpdateErrorDialog(task.getException());
+        });
+
+        Thread thread = new Thread(task, "launcher-update");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private Stage showUpdateProgressDialog(Task<Void> task) {
+
+        Label titleLabel = new Label("Mise à jour du launcher...");
+        titleLabel.getStyleClass().add("welcome-label");
+
+        ProgressBar progressBar = new ProgressBar();
+        progressBar.progressProperty().bind(task.progressProperty());
+        progressBar.setPrefWidth(320);
+
+        Label statusLabel = new Label();
+        statusLabel.textProperty().bind(task.messageProperty());
+
+        VBox content = new VBox(14, titleLabel, progressBar, statusLabel);
+        content.setAlignment(Pos.CENTER);
+        content.setPadding(new Insets(28));
+        content.getStyleClass().add("modal-card");
+
+        Stage dialog = new Stage(StageStyle.UNDECORATED);
+        dialog.initOwner(stage);
+        dialog.initModality(Modality.APPLICATION_MODAL);
+
+        Scene scene = new Scene(content, 380, 170);
+        scene.getStylesheets().add(
+                Objects.requireNonNull(getClass().getResource("app.css")).toExternalForm()
+        );
+
+        dialog.setScene(scene);
+        dialog.setResizable(false);
+        dialog.show();
+
+        return dialog;
+    }
+
+    private void showUpdateErrorDialog(Throwable error) {
+
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Erreur");
+        alert.setHeaderText("La mise à jour du launcher a échoué");
+        alert.setContentText(error != null ? error.getMessage() : "Erreur inconnue.");
+        alert.showAndWait();
     }
 }

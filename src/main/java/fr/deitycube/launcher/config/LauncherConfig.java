@@ -15,6 +15,13 @@ public final class LauncherConfig {
     public static final String DEITYCUBE_MANIFEST_URL =
             "https://deitycube.fr/downloads/manifest_deitycube.json";
 
+    public static final String LAUNCHER_UPDATE_MANIFEST_URL =
+            "https://deitycube.fr/downloads/launcher_manifest.json";
+
+    // Doit correspondre au --name utilisé par la tâche Gradle 'createInstaller' (jpackage),
+    // puisque c'est le nom du dossier d'installation sous %LOCALAPPDATA%.
+    public static final String LAUNCHER_INSTALL_NAME = "DeityCubeLauncher";
+
     public static final String DEFAULT_MODPACK_PROFILE =
             "Max";
 }

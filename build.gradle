@@ -15,7 +15,7 @@ plugins {
 apply plugin: 'org.openjfx.javafxplugin'
 
 group = 'fr.deitycube'
-version = '1.0'
+version = '1.0.0'
 
 repositories {
     mavenCentral()
@@ -50,4 +50,54 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+processResources {
+    filesMatching('fr/deitycube/launcher/version.properties') {
+        expand(version: project.version)
+    }
+}
+
+tasks.register('createInstaller', Exec) {
+    group = 'distribution'
+    description = 'Génère un installeur Windows (.exe) via jpackage. Nécessite WiX Toolset (candle/light) sur le PATH.'
+
+    dependsOn tasks.named('installDist')
+
+    def installDir = layout.buildDirectory.dir("install/${project.name}/lib")
+    def outputDir = layout.buildDirectory.dir('jpackage')
+    def jpackageExecutable = "${System.getProperty('java.home')}/bin/jpackage.exe"
+
+    // GUID fixe utilisé par WiX pour reconnaître les installations d'une même app.
+    // NE JAMAIS LE CHANGER entre deux versions : c'est ce qui permet à une mise à jour
+    // silencieuse (voir LauncherUpdater) de remplacer l'installation existante au lieu
+    // d'en créer une nouvelle à côté.
+    def winUpgradeUuid = '5B1F3E6B-6C1E-4B0E-9C7A-2B7B7E9C7D1A'
+
+    doFirst {
+        if (!org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+            throw new GradleException("'createInstaller' ne fonctionne que sur Windows (jpackage --type exe + WiX).")
+        }
+        outputDir.get().asFile.mkdirs()
+    }
+
+    commandLine(
+            jpackageExecutable,
+            '--type', 'exe',
+            '--input', installDir.get().asFile.absolutePath,
+            '--dest', outputDir.get().asFile.absolutePath,
+            '--name', project.name,
+            '--main-jar', "${project.name}-${project.version}.jar",
+            '--main-class', 'fr.deitycube.launcher.ui.LauncherApp',
+            '--app-version', project.version.toString(),
+            '--vendor', 'DeityCube',
+            '--description', 'Official launcher for the DeityCube modpack',
+            '--copyright', "Copyright (c) ${new Date().format('yyyy')} DeityCube",
+            '--license-file', file('LICENSE').absolutePath,
+            '--win-per-user-install',
+            '--win-dir-chooser',
+            '--win-menu',
+            '--win-shortcut',
+            '--win-upgrade-uuid', winUpgradeUuid
+    )
 }
