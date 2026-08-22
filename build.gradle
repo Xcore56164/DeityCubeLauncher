@@ -15,7 +15,7 @@ plugins {
 apply plugin: 'org.openjfx.javafxplugin'
 
 group = 'fr.deitycube'
-version = '1.0.0'
+version = '1.0.1'
 
 repositories {
     mavenCentral()
@@ -65,10 +65,18 @@ tasks.register('createInstaller') {
     dependsOn tasks.named('installDist')
 
     def currentOs = org.gradle.internal.os.OperatingSystem.current()
+    def exeSuffix = currentOs.isWindows() ? '.exe' : ''
 
     def installDir = layout.buildDirectory.dir("install/${project.name}/lib")
     def outputDir = layout.buildDirectory.dir('jpackage')
-    def jpackageBin = "${System.getProperty('java.home')}/bin/jpackage" + (currentOs.isWindows() ? '.exe' : '')
+    def runtimeImageDir = layout.buildDirectory.dir('jpackage-runtime')
+
+    // IMPORTANT : on résout le JDK via le toolchain (celui qui compile l'app), pas via
+    // System.getProperty('java.home') — ce dernier reflète le JVM du démon Gradle, qui peut
+    // être n'importe quel JDK installé sur la machine (plusieurs démons coexistent souvent),
+    // pas forcément celui du toolchain. Un mismatch produirait un runtime empaqueté d'une
+    // version différente du bytecode compilé (--release 21), donc une UnsupportedClassVersionError.
+    def javaLauncher = javaToolchains.launcherFor(java.toolchain)
 
     def winIconFile = file('src/main/resources/fr/deitycube/launcher/ui/assets/logo.ico')
     def linuxIconFile = file('src/main/resources/fr/deitycube/launcher/ui/assets/logo.png')
@@ -90,7 +98,33 @@ tasks.register('createInstaller') {
 
         outputDir.get().asFile.mkdirs()
 
+        def javaHome = javaLauncher.get().metadata.installationPath.asFile.absolutePath
+        def jpackageBin = "${javaHome}/bin/jpackage${exeSuffix}"
+        def jlinkBin = "${javaHome}/bin/jlink${exeSuffix}"
+        def jmodsDir = "${javaHome}/jmods"
+
+        // Sans --runtime-image, jpackage se construit lui-même un runtime minimal qui NE
+        // CONTIENT PAS java(.exe) (seulement les .dll/.so) : notre code lance pourtant des
+        // sous-process Java (MinecraftLauncher, NeoForgeProcessorExecutor) via
+        // <java.home>/bin/java(.exe), ce qui échoue une fois packagé. On construit donc
+        // nous-mêmes un runtime complet avec jlink (qui conserve java(.exe) par défaut), à
+        // partir du JDK du toolchain (voir javaLauncher ci-dessus).
+        def runtimeImagePath = runtimeImageDir.get().asFile
+        delete(runtimeImagePath)
+
+        exec {
+            commandLine(
+                    jlinkBin,
+                    '--module-path', jmodsDir,
+                    '--add-modules', 'ALL-MODULE-PATH',
+                    '--no-header-files',
+                    '--no-man-pages',
+                    '--output', runtimeImagePath.absolutePath
+            )
+        }
+
         def commonArgs = [
+                '--runtime-image', runtimeImagePath.absolutePath,
                 '--input', installDir.get().asFile.absolutePath,
                 '--dest', outputDir.get().asFile.absolutePath,
                 '--name', project.name,
