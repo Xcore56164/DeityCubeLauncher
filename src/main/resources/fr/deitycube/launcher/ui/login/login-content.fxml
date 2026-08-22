@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml"
+           fx:controller="fr.deitycube.launcher.ui.login.LoginController">
+
+    <VBox alignment="CENTER" spacing="26" maxWidth="380">
+
+        <ImageView fx:id="titleLogoView" fitWidth="380" preserveRatio="true" pickOnBounds="false">
+            <Image url="@../assets/logo-title.png" backgroundLoading="true"/>
+        </ImageView>
+
+        <VBox styleClass="auth-card" spacing="16" maxWidth="340">
+
+            <HBox styleClass="segmented-toggle" alignment="CENTER">
+                <Button fx:id="offlineTabButton" text="Pseudo" styleClass="segment-button"
+                        maxWidth="Infinity" HBox.hgrow="ALWAYS" onAction="#onSelectOfflineTab"/>
+                <Button fx:id="microsoftTabButton" text="Microsoft" styleClass="segment-button"
+                        maxWidth="Infinity" HBox.hgrow="ALWAYS" onAction="#onSelectMicrosoftTab"/>
+            </HBox>
+
+            <VBox fx:id="offlinePane" spacing="12">
+                <TextField fx:id="usernameField" promptText="Ton pseudo"/>
+                <Button fx:id="offlineLoginButton" text="Se connecter" styleClass="btn-gold"
+                        maxWidth="Infinity" onAction="#onOfflineLogin"/>
+            </VBox>
+
+            <VBox fx:id="microsoftPane" spacing="12" managed="false" visible="false">
+                <Label text="Connecte-toi avec ton compte Microsoft pour jouer avec ton pseudo officiel."
+                       wrapText="true" styleClass="welcome-sub-label"/>
+                <Button fx:id="microsoftLoginButton" text="Se connecter avec Microsoft"
+                        styleClass="btn-gold" maxWidth="Infinity" onAction="#onMicrosoftLogin"/>
+            </VBox>
+
+            <CheckBox fx:id="rememberMeCheckbox" text="Se souvenir de moi" selected="true"/>
+
+            <VBox alignment="CENTER" spacing="8">
+                <ProgressIndicator fx:id="loadingIndicator" visible="false" managed="false"
+                                    progress="-1" maxWidth="22" maxHeight="22"/>
+                <Label fx:id="statusLabel" styleClass="status-label" wrapText="true"
+                       textAlignment="CENTER"/>
+            </VBox>
+
+            <padding>
+                <Insets top="4" bottom="4"/>
+            </padding>
+        </VBox>
+    </VBox>
+
+</StackPane>

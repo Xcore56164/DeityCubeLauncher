@@ -17,8 +17,9 @@ public final class DeityCubeManifest {
     @JsonProperty("neoforge_version")
     private String neoforgeVersion;
 
-    @JsonProperty("package")
-    private Map<String, DeityCubePackage> packages;
+    private DeityCubeCommonFiles common;
+
+    private Map<String, DeityCubePackage> profiles;
 
     public String getModpackVersion() {
         return modpackVersion;
@@ -32,7 +33,11 @@ public final class DeityCubeManifest {
         return neoforgeVersion;
     }
 
-    public Map<String, DeityCubePackage> getPackages() {
-        return packages;
+    public DeityCubeCommonFiles getCommon() {
+        return common;
+    }
+
+    public Map<String, DeityCubePackage> getProfiles() {
+        return profiles;
     }
 }

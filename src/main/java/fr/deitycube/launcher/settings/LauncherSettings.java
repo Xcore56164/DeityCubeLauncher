@@ -11,7 +11,7 @@ public final class LauncherSettings {
     private String microsoftRefreshToken;
     private String selectedProfile = LauncherConfig.DEFAULT_MODPACK_PROFILE;
     private int allocatedRamMb;
-    private boolean closeLauncherOnPlay = false;
+    private boolean keepLauncherOpenWhilePlaying = true;
     private boolean rememberMe = true;
 
     public String getAuthMode() {
@@ -54,12 +54,12 @@ public final class LauncherSettings {
         this.allocatedRamMb = allocatedRamMb;
     }
 
-    public boolean isCloseLauncherOnPlay() {
-        return closeLauncherOnPlay;
+    public boolean isKeepLauncherOpenWhilePlaying() {
+        return keepLauncherOpenWhilePlaying;
     }
 
-    public void setCloseLauncherOnPlay(boolean closeLauncherOnPlay) {
-        this.closeLauncherOnPlay = closeLauncherOnPlay;
+    public void setKeepLauncherOpenWhilePlaying(boolean keepLauncherOpenWhilePlaying) {
+        this.keepLauncherOpenWhilePlaying = keepLauncherOpenWhilePlaying;
     }
 
     public boolean isRememberMe() {

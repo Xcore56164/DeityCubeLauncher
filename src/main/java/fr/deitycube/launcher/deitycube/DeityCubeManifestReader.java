@@ -53,17 +53,43 @@ public final class DeityCubeManifestReader {
                 "modpack_version"
         );
 
-        if (manifest.getPackages() == null
-                || manifest.getPackages().isEmpty()) {
+        if (manifest.getCommon() == null) {
 
             throw new IOException(
-                    "Champ 'package' absent ou vide "
+                    "Champ 'common' absent du manifest DeityCube."
+            );
+        }
+
+        requireText(
+                manifest.getCommon().getBaseUrl(),
+                "common.base_url"
+        );
+
+        if (manifest.getCommon().getFiles() == null
+                || manifest.getCommon().getFiles().isEmpty()) {
+
+            throw new IOException(
+                    "Champ 'common.files' absent ou vide "
+                            + "dans le manifest DeityCube."
+            );
+        }
+
+        for (DeityCubePackageFile file : manifest.getCommon().getFiles()) {
+
+            validateFile("common", file);
+        }
+
+        if (manifest.getProfiles() == null
+                || manifest.getProfiles().isEmpty()) {
+
+            throw new IOException(
+                    "Champ 'profiles' absent ou vide "
                             + "dans le manifest DeityCube."
             );
         }
 
         for (Map.Entry<String, DeityCubePackage> entry :
-                manifest.getPackages().entrySet()) {
+                manifest.getProfiles().entrySet()) {
 
             String profile =
                     entry.getKey();
@@ -81,20 +107,86 @@ public final class DeityCubeManifestReader {
             }
 
             requireText(
-                    pack.getDownloadUrl(),
-                    "package." + profile + ".download_url"
+                    pack.getBaseUrl(),
+                    "profiles." + profile + ".base_url"
             );
 
-            requireText(
-                    pack.getSha256(),
-                    "package." + profile + ".sha256"
-            );
+            if (pack.getFiles() == null
+                    || pack.getFiles().isEmpty()) {
 
-            requireText(
-                    pack.getFilename(),
-                    "package." + profile + ".filename"
+                throw new IOException(
+                        "Champ 'profiles."
+                                + profile
+                                + ".files' absent ou vide "
+                                + "dans le manifest DeityCube."
+                );
+            }
+
+            for (DeityCubePackageFile file : pack.getFiles()) {
+
+                validateFile("profiles." + profile, file);
+            }
+        }
+    }
+
+    private static void validateFile(
+            String section,
+            DeityCubePackageFile file
+    ) throws IOException {
+
+        if (file == null) {
+
+            throw new IOException(
+                    "Entrée de fichier vide dans "
+                            + section
+                            + ".files."
             );
         }
+
+        requireText(
+                file.getPath(),
+                section + ".files[].path"
+        );
+
+        requireText(
+                file.getSha256(),
+                section + ".files[].sha256"
+        );
+
+        if (!isSafeRelativePath(file.getPath())) {
+
+            throw new IOException(
+                    "Chemin de fichier invalide dans "
+                            + section
+                            + ".files : "
+                            + file.getPath()
+            );
+        }
+    }
+
+    private static boolean isSafeRelativePath(
+            String path
+    ) {
+
+        if (path.startsWith("/")
+                || path.startsWith("\\")
+                || path.contains("\\")
+                || path.contains(":")) {
+
+            return false;
+        }
+
+        for (String segment : path.split("/")) {
+
+            if (segment.isBlank()
+                    || segment.equals("..")
+                    || segment.equals(".")) {
+
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void requireText(

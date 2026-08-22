@@ -6,6 +6,8 @@ import fr.deitycube.launcher.auth.MicrosoftLoginResult;
 import fr.deitycube.launcher.auth.OfflineAuthenticator;
 import fr.deitycube.launcher.settings.LauncherSettings;
 import fr.deitycube.launcher.ui.LauncherApp;
+import javafx.animation.Interpolator;
+import javafx.animation.TranslateTransition;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -15,8 +17,26 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 
 public final class LoginController {
+
+    @FXML
+    private ImageView titleLogoView;
+
+    @FXML
+    private Button offlineTabButton;
+
+    @FXML
+    private Button microsoftTabButton;
+
+    @FXML
+    private VBox offlinePane;
+
+    @FXML
+    private VBox microsoftPane;
 
     @FXML
     private TextField usernameField;
@@ -42,18 +62,61 @@ public final class LoginController {
 
         this.app = app;
 
+        playFloatAnimation();
+
         LauncherSettings settings = app.getSettings();
 
         usernameField.setText(settings.getOfflineUsername());
         rememberMeCheckbox.setSelected(settings.isRememberMe());
 
+        boolean microsoftMode = "MICROSOFT".equals(settings.getAuthMode());
+
+        selectTab(microsoftMode);
+
         if (settings.isRememberMe()
-                && "MICROSOFT".equals(settings.getAuthMode())
+                && microsoftMode
                 && settings.getMicrosoftRefreshToken() != null
                 && !settings.getMicrosoftRefreshToken().isBlank()) {
 
             attemptSilentMicrosoftLogin(settings.getMicrosoftRefreshToken());
         }
+    }
+
+    private void playFloatAnimation() {
+
+        TranslateTransition floatUp = new TranslateTransition(Duration.seconds(2.75), titleLogoView);
+        floatUp.setByY(-9);
+        floatUp.setCycleCount(TranslateTransition.INDEFINITE);
+        floatUp.setAutoReverse(true);
+        floatUp.setInterpolator(Interpolator.EASE_BOTH);
+        floatUp.play();
+    }
+
+    @FXML
+    private void onSelectOfflineTab() {
+        selectTab(false);
+    }
+
+    @FXML
+    private void onSelectMicrosoftTab() {
+        selectTab(true);
+    }
+
+    private void selectTab(boolean microsoft) {
+
+        offlineTabButton.getStyleClass().removeAll("selected-segment");
+        microsoftTabButton.getStyleClass().removeAll("selected-segment");
+
+        if (microsoft) {
+            microsoftTabButton.getStyleClass().add("selected-segment");
+        } else {
+            offlineTabButton.getStyleClass().add("selected-segment");
+        }
+
+        offlinePane.setVisible(!microsoft);
+        offlinePane.setManaged(!microsoft);
+        microsoftPane.setVisible(microsoft);
+        microsoftPane.setManaged(microsoft);
     }
 
     @FXML
@@ -63,8 +126,7 @@ public final class LoginController {
 
         try {
 
-            var authentication =
-                    OfflineAuthenticator.authenticate(username);
+            var authentication = OfflineAuthenticator.authenticate(username);
 
             persistOfflineSession(username);
 
@@ -112,9 +174,7 @@ public final class LoginController {
             );
         });
 
-        Thread thread = new Thread(task, "microsoft-login");
-        thread.setDaemon(true);
-        thread.start();
+        runInBackground(task, "microsoft-login");
     }
 
     private void attemptSilentMicrosoftLogin(String refreshToken) {
@@ -143,7 +203,11 @@ public final class LoginController {
 
         task.setOnFailed(event -> setLoading(false, ""));
 
-        Thread thread = new Thread(task, "microsoft-silent-login");
+        runInBackground(task, "microsoft-silent-login");
+    }
+
+    private void runInBackground(Task<?> task, String name) {
+        Thread thread = new Thread(task, name);
         thread.setDaemon(true);
         thread.start();
     }
@@ -181,8 +245,11 @@ public final class LoginController {
 
         Platform.runLater(() -> {
             loadingIndicator.setVisible(loading);
+            loadingIndicator.setManaged(loading);
             offlineLoginButton.setDisable(loading);
             microsoftLoginButton.setDisable(loading);
+            offlineTabButton.setDisable(loading);
+            microsoftTabButton.setDisable(loading);
             statusLabel.setText(message);
         });
     }

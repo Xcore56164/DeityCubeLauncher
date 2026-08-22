@@ -284,7 +284,7 @@ public final class InstallationPipeline {
             ProgressListener listener
     ) throws Exception {
 
-        DeityCubePackage pack =
+        DeityCubePackage profile =
                 selectModpackProfile(
                         manifest,
                         profileName
@@ -293,7 +293,8 @@ public final class InstallationPipeline {
         new DeityCubePackageInstaller(
                 GameDirectory.getGameDirectory()
         ).install(
-                pack,
+                manifest,
+                profile,
                 listener
         );
     }
@@ -303,7 +304,7 @@ public final class InstallationPipeline {
             String profileName
     ) {
 
-        for (var entry : manifest.getPackages().entrySet()) {
+        for (var entry : manifest.getProfiles().entrySet()) {
 
             if (entry.getKey().equalsIgnoreCase(
                     profileName
@@ -318,7 +319,7 @@ public final class InstallationPipeline {
                         + profileName
                         + "' introuvable dans le manifest DeityCube. "
                         + "Profils disponibles : "
-                        + manifest.getPackages().keySet()
+                        + manifest.getProfiles().keySet()
         );
     }
 

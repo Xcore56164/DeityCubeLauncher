@@ -9,6 +9,7 @@ import fr.deitycube.launcher.progress.InstallationPipeline;
 import fr.deitycube.launcher.progress.ProgressListener;
 import fr.deitycube.launcher.settings.LauncherSettings;
 import fr.deitycube.launcher.ui.LauncherApp;
+import javafx.animation.FadeTransition;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -16,11 +17,18 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextArea;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.shape.Rectangle;
+import javafx.util.Duration;
 
 import java.awt.Desktop;
 import java.io.IOException;
@@ -28,6 +36,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
+import java.util.List;
 
 public final class DashboardController {
 
@@ -35,25 +44,22 @@ public final class DashboardController {
     private Label welcomeLabel;
 
     @FXML
-    private Label versionInfoLabel;
-
-    @FXML
-    private ComboBox<String> profileComboBox;
-
-    @FXML
-    private Slider ramSlider;
-
-    @FXML
-    private Label ramValueLabel;
-
-    @FXML
-    private CheckBox closeLauncherCheckbox;
+    private HBox profileToggle;
 
     @FXML
     private Button playButton;
 
     @FXML
-    private Button reinstallButton;
+    private Button settingsButton;
+
+    @FXML
+    private Button logoutButton;
+
+    @FXML
+    private VBox idleBox;
+
+    @FXML
+    private VBox progressBox;
 
     @FXML
     private ProgressBar progressBar;
@@ -64,8 +70,39 @@ public final class DashboardController {
     @FXML
     private Label detailLabel;
 
+    @FXML
+    private StackPane settingsOverlay;
+
+    @FXML
+    private VBox modalCard;
+
+    @FXML
+    private Label versionsInfoLabel;
+
+    @FXML
+    private VBox ramRow;
+
+    @FXML
+    private Slider ramSlider;
+
+    @FXML
+    private Label ramValueLabel;
+
+    @FXML
+    private CheckBox keepOpenCheckbox;
+
+    @FXML
+    private Button logsButton;
+
+    @FXML
+    private Button gameFolderButton;
+
+    @FXML
+    private Button reinstallButton;
+
     private LauncherApp app;
     private final InstallationPipeline pipeline = new InstallationPipeline();
+    private String selectedProfile;
 
     public void init(LauncherApp app) {
 
@@ -74,44 +111,111 @@ public final class DashboardController {
         LauncherSettings settings = app.getSettings();
 
         welcomeLabel.setText(
-                "Bonjour, "
-                        + app.getAuthentication().getUsername()
+                "Bonjour, " + app.getAuthentication().getUsername()
         );
 
         configureRamSlider(settings);
+        clipToBounds(modalCard);
 
-        closeLauncherCheckbox.setSelected(
-                settings.isCloseLauncherOnPlay()
-        );
+        keepOpenCheckbox.setSelected(settings.isKeepLauncherOpenWhilePlaying());
 
         playButton.setDisable(true);
-        reinstallButton.setDisable(true);
-        phaseLabel.setText("Chargement du manifest DeityCube...");
-        progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        profileToggle.setDisable(true);
 
-        loadManifest();
+        app.ensureManifestLoaded(
+                this::onManifestReady,
+                error -> showErrorDialog("Impossible de récupérer le manifest DeityCube", error)
+        );
+    }
+
+    private void onManifestReady() {
+
+        DeityCubeManifest manifest = app.getManifest();
+
+        List<String> profiles = List.copyOf(manifest.getProfiles().keySet());
+
+        String savedProfile = app.getSettings().getSelectedProfile();
+
+        String initialProfile =
+                savedProfile != null && profiles.contains(savedProfile)
+                        ? savedProfile
+                        : profiles.isEmpty() ? null : profiles.get(0);
+
+        buildProfileToggle(profiles, initialProfile);
+
+        versionsInfoLabel.setText(
+                "Minecraft " + manifest.getMinecraftVersion()
+                        + "\nNeoForge " + manifest.getNeoforgeVersion()
+                        + "\nModpack DeityCube " + manifest.getModpackVersion()
+        );
+
+        playButton.setDisable(false);
+        profileToggle.setDisable(false);
+    }
+
+    private void buildProfileToggle(List<String> profiles, String initialProfile) {
+
+        profileToggle.getChildren().clear();
+
+        for (String profile : profiles) {
+
+            Button segment = new Button(profile);
+            segment.getStyleClass().add("segment-button");
+            segment.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(segment, Priority.ALWAYS);
+            segment.setOnAction(event -> selectProfile(profile));
+
+            profileToggle.getChildren().add(segment);
+        }
+
+        selectProfile(initialProfile);
+    }
+
+    private void selectProfile(String profile) {
+
+        selectedProfile = profile;
+
+        for (var node : profileToggle.getChildren()) {
+
+            Button segment = (Button) node;
+
+            segment.getStyleClass().remove("selected-segment");
+
+            if (segment.getText().equals(profile)) {
+                segment.getStyleClass().add("selected-segment");
+            }
+        }
     }
 
     private void configureRamSlider(LauncherSettings settings) {
 
         int totalRamMb = getSystemRamMb();
-        int maxRamMb = Math.min(totalRamMb, 16384);
+        int maxRamMb = Math.max(Math.min(totalRamMb, 16384), 2048);
         int defaultRamMb = roundTo512(totalRamMb / 2);
 
         ramSlider.setMin(1024);
-        ramSlider.setMax(Math.max(maxRamMb, 2048));
+        ramSlider.setMax(maxRamMb);
 
         int savedRamMb = settings.getAllocatedRamMb();
 
-        ramSlider.setValue(
-                savedRamMb > 0 ? savedRamMb : defaultRamMb
-        );
+        ramSlider.setValue(savedRamMb > 0 ? savedRamMb : defaultRamMb);
 
         ramValueLabel.setText(formatRam((int) ramSlider.getValue()));
 
         ramSlider.valueProperty().addListener((obs, oldValue, newValue) ->
                 ramValueLabel.setText(formatRam(newValue.intValue()))
         );
+
+        clipToBounds(ramRow);
+    }
+
+    private void clipToBounds(Region region) {
+
+        Rectangle clip = new Rectangle();
+        clip.widthProperty().bind(region.widthProperty());
+        clip.heightProperty().bind(region.heightProperty());
+
+        region.setClip(clip);
     }
 
     private int getSystemRamMb() {
@@ -135,68 +239,10 @@ public final class DashboardController {
         return ramMb + " Mo";
     }
 
-    private void loadManifest() {
-
-        Task<DeityCubeManifest> task = new Task<>() {
-            @Override
-            protected DeityCubeManifest call() throws Exception {
-                return InstallationPipeline.fetchManifest();
-            }
-        };
-
-        task.setOnSucceeded(event -> {
-
-            DeityCubeManifest manifest = task.getValue();
-
-            app.setManifest(manifest);
-
-            profileComboBox.getItems().setAll(
-                    manifest.getPackages().keySet()
-            );
-
-            String savedProfile = app.getSettings().getSelectedProfile();
-
-            if (savedProfile != null
-                    && profileComboBox.getItems().contains(savedProfile)) {
-
-                profileComboBox.getSelectionModel().select(savedProfile);
-
-            } else if (!profileComboBox.getItems().isEmpty()) {
-
-                profileComboBox.getSelectionModel().selectFirst();
-            }
-
-            versionInfoLabel.setText(
-                    "Minecraft "
-                            + manifest.getMinecraftVersion()
-                            + "  •  NeoForge "
-                            + manifest.getNeoforgeVersion()
-                            + "  •  Modpack "
-                            + manifest.getModpackVersion()
-            );
-
-            phaseLabel.setText("Prêt.");
-            progressBar.setProgress(0);
-
-            playButton.setDisable(false);
-            reinstallButton.setDisable(false);
-        });
-
-        task.setOnFailed(event ->
-                showErrorDialog(
-                        "Impossible de récupérer le manifest DeityCube",
-                        task.getException()
-                )
-        );
-
-        runInBackground(task, "manifest-load");
-    }
-
     @FXML
     private void onPlay() {
 
         persistSelection();
-
         runGameTask(false);
     }
 
@@ -214,6 +260,7 @@ public final class DashboardController {
         confirm.showAndWait().filter(button -> button == ButtonType.OK)
                 .ifPresent(button -> {
                     persistSelection();
+                    closeSettings();
                     runGameTask(true);
                 });
     }
@@ -230,9 +277,43 @@ public final class DashboardController {
 
     @FXML
     private void onLogout() {
-
         app.setAuthentication(null);
         app.showLogin();
+    }
+
+    @FXML
+    private void onOpenSettings() {
+
+        settingsOverlay.setVisible(true);
+        settingsOverlay.setManaged(true);
+        settingsOverlay.setOpacity(0);
+
+        FadeTransition fade = new FadeTransition(Duration.millis(180), settingsOverlay);
+        fade.setFromValue(0);
+        fade.setToValue(1);
+        fade.play();
+    }
+
+    @FXML
+    private void onCloseSettings() {
+        persistSelection();
+        closeSettings();
+    }
+
+    @FXML
+    private void onScrimClicked() {
+        persistSelection();
+        closeSettings();
+    }
+
+    @FXML
+    private void onCardClicked(MouseEvent event) {
+        event.consume();
+    }
+
+    private void closeSettings() {
+        settingsOverlay.setVisible(false);
+        settingsOverlay.setManaged(false);
     }
 
     private void openFolder(java.nio.file.Path folder) {
@@ -254,12 +335,12 @@ public final class DashboardController {
 
         LauncherSettings settings = app.getSettings();
 
-        settings.setSelectedProfile(
-                profileComboBox.getSelectionModel().getSelectedItem()
-        );
+        if (selectedProfile != null) {
+            settings.setSelectedProfile(selectedProfile);
+        }
 
         settings.setAllocatedRamMb((int) ramSlider.getValue());
-        settings.setCloseLauncherOnPlay(closeLauncherCheckbox.isSelected());
+        settings.setKeepLauncherOpenWhilePlaying(keepOpenCheckbox.isSelected());
 
         app.saveSettings();
     }
@@ -268,33 +349,27 @@ public final class DashboardController {
 
         setControlsDisabled(true);
 
-        String profile = profileComboBox.getSelectionModel().getSelectedItem();
-        int ramMb = (int) ramSlider.getValue();
-        boolean closeOnPlay = closeLauncherCheckbox.isSelected() && !reinstall;
+        idleBox.setVisible(false);
+        idleBox.setManaged(false);
+        progressBox.setVisible(true);
+        progressBox.setManaged(true);
 
-        GameTask task = new GameTask(reinstall, profile, ramMb, closeOnPlay);
+        String profile = selectedProfile;
+        int ramMb = (int) ramSlider.getValue();
+        boolean keepOpen = keepOpenCheckbox.isSelected() || reinstall;
+
+        GameTask task = new GameTask(reinstall, profile, ramMb, keepOpen);
 
         progressBar.progressProperty().bind(task.progressProperty());
         phaseLabel.textProperty().bind(task.titleProperty());
         detailLabel.textProperty().bind(task.messageProperty());
 
-        task.setOnSucceeded(event -> {
-            unbindProgress();
-            phaseLabel.setText("Prêt.");
-            detailLabel.setText("");
-            progressBar.setProgress(0);
-            setControlsDisabled(false);
-        });
+        task.setOnSucceeded(event -> finishGameTask());
 
         task.setOnFailed(event -> {
-            unbindProgress();
-            phaseLabel.setText("Échec.");
-            progressBar.setProgress(0);
-            setControlsDisabled(false);
+            finishGameTask();
             showErrorDialog(
-                    reinstall
-                            ? "La réinstallation a échoué"
-                            : "Le lancement du jeu a échoué",
+                    reinstall ? "La réinstallation a échoué" : "Le lancement du jeu a échoué",
                     task.getException()
             );
         });
@@ -302,17 +377,25 @@ public final class DashboardController {
         runInBackground(task, reinstall ? "reinstall" : "play");
     }
 
-    private void unbindProgress() {
+    private void finishGameTask() {
+
         progressBar.progressProperty().unbind();
         phaseLabel.textProperty().unbind();
         detailLabel.textProperty().unbind();
+
+        progressBox.setVisible(false);
+        progressBox.setManaged(false);
+        idleBox.setVisible(true);
+        idleBox.setManaged(true);
+
+        setControlsDisabled(false);
     }
 
     private void setControlsDisabled(boolean disabled) {
         playButton.setDisable(disabled);
-        reinstallButton.setDisable(disabled);
-        profileComboBox.setDisable(disabled);
-        ramSlider.setDisable(disabled);
+        profileToggle.setDisable(disabled);
+        settingsButton.setDisable(disabled);
+        logoutButton.setDisable(disabled);
     }
 
     private void runInBackground(Task<?> task, String name) {
@@ -360,18 +443,13 @@ public final class DashboardController {
         private final boolean reinstall;
         private final String profile;
         private final int ramMb;
-        private final boolean closeOnPlay;
+        private final boolean keepOpen;
 
-        private GameTask(
-                boolean reinstall,
-                String profile,
-                int ramMb,
-                boolean closeOnPlay
-        ) {
+        private GameTask(boolean reinstall, String profile, int ramMb, boolean keepOpen) {
             this.reinstall = reinstall;
             this.profile = profile;
             this.ramMb = ramMb;
-            this.closeOnPlay = closeOnPlay;
+            this.keepOpen = keepOpen;
         }
 
         @Override
@@ -398,20 +476,19 @@ public final class DashboardController {
                     ramMb
             );
 
-            if (closeOnPlay) {
+            if (!keepOpen) {
                 Platform.runLater(() -> app.getStage().hide());
             }
 
             int exitCode = process.waitFor();
 
-            if (closeOnPlay) {
+            if (!keepOpen) {
                 Platform.runLater(() -> app.getStage().show());
             }
 
             if (exitCode != 0) {
                 throw new IOException(
-                        "Minecraft s'est terminé avec le code "
-                                + exitCode
+                        "Minecraft s'est terminé avec le code " + exitCode
                 );
             }
 
@@ -419,12 +496,8 @@ public final class DashboardController {
         }
 
         @Override
-        public void update(
-                String phase,
-                String detail,
-                long current,
-                long total
-        ) {
+        public void update(String phase, String detail, long current, long total) {
+
             updateTitle(phase);
             updateMessage(detail);
 

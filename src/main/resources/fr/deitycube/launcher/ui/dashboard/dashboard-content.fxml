@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml"
+           fx:controller="fr.deitycube.launcher.ui.dashboard.DashboardController">
+
+    <BorderPane pickOnBounds="false">
+
+        <top>
+            <HBox alignment="CENTER_LEFT" spacing="14" pickOnBounds="false">
+                <padding>
+                    <Insets top="22" right="26" bottom="0" left="26"/>
+                </padding>
+
+                <ImageView fitWidth="38" preserveRatio="true">
+                    <Image url="@../assets/logo.png" backgroundLoading="true"/>
+                </ImageView>
+
+                <VBox spacing="1">
+                    <Label fx:id="welcomeLabel" styleClass="welcome-label"/>
+                    <Label text="Bienvenue sur DeityCube" styleClass="welcome-sub-label"/>
+                </VBox>
+
+                <Region HBox.hgrow="ALWAYS"/>
+
+                <Button fx:id="settingsButton" text="⚙" styleClass="btn-icon"
+                        onAction="#onOpenSettings"/>
+                <Button fx:id="logoutButton" text="Déconnexion" styleClass="btn-ghost"
+                        onAction="#onLogout"/>
+            </HBox>
+        </top>
+
+        <bottom>
+            <VBox alignment="CENTER" spacing="0" pickOnBounds="false">
+                <padding>
+                    <Insets top="0" right="0" bottom="34" left="0"/>
+                </padding>
+
+                <StackPane>
+
+                    <VBox fx:id="idleBox" alignment="CENTER" spacing="14">
+                        <HBox fx:id="profileToggle" styleClass="segmented-toggle"
+                              alignment="CENTER" prefWidth="240" maxWidth="240"/>
+                        <Button fx:id="playButton" text="JOUER" styleClass="btn-gold"
+                                onAction="#onPlay"/>
+                    </VBox>
+
+                    <VBox fx:id="progressBox" alignment="CENTER" spacing="10" maxWidth="420"
+                          visible="false" managed="false">
+                        <ProgressBar fx:id="progressBar" progress="0" prefWidth="380"/>
+                        <Label fx:id="phaseLabel" styleClass="value-label"/>
+                        <Label fx:id="detailLabel" styleClass="welcome-sub-label"/>
+                    </VBox>
+
+                </StackPane>
+            </VBox>
+        </bottom>
+
+    </BorderPane>
+
+    <!-- Overlay réglages -->
+    <StackPane fx:id="settingsOverlay" styleClass="modal-scrim" visible="false"
+               managed="false" onMouseClicked="#onScrimClicked">
+
+        <VBox fx:id="modalCard" styleClass="modal-card" maxWidth="440" maxHeight="560"
+              onMouseClicked="#onCardClicked">
+            <padding>
+                <Insets top="24" right="8" bottom="24" left="26"/>
+            </padding>
+
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label text="Paramètres" styleClass="modal-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="✕" styleClass="btn-icon" onAction="#onCloseSettings">
+                    <HBox.margin>
+                        <Insets right="18"/>
+                    </HBox.margin>
+                </Button>
+            </HBox>
+
+            <ScrollPane fitToWidth="true" styleClass="modal-scroll" VBox.vgrow="ALWAYS">
+                <VBox spacing="18">
+                    <padding>
+                        <Insets top="18" right="18" bottom="6" left="2"/>
+                    </padding>
+
+                    <VBox styleClass="modal-row" spacing="8">
+                        <Label text="VERSIONS" styleClass="section-label"/>
+                        <Label fx:id="versionsInfoLabel" styleClass="value-label" wrapText="true"/>
+                    </VBox>
+
+                    <VBox fx:id="ramRow" styleClass="modal-row" spacing="10">
+                        <HBox alignment="CENTER_LEFT">
+                            <Label text="RAM ALLOUÉE" styleClass="section-label"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="ramValueLabel" styleClass="value-label"/>
+                        </HBox>
+                        <HBox alignment="CENTER" minWidth="0">
+                            <Slider fx:id="ramSlider" maxWidth="Infinity" minWidth="0"
+                                    HBox.hgrow="ALWAYS"/>
+                        </HBox>
+                    </VBox>
+
+                    <VBox styleClass="modal-row">
+                        <CheckBox fx:id="keepOpenCheckbox"
+                                  text="Garder le launcher ouvert pendant que le jeu tourne"
+                                  wrapText="true"/>
+                    </VBox>
+
+                    <VBox spacing="10">
+                        <Button fx:id="logsButton" text="Voir les logs" styleClass="btn-ghost"
+                                maxWidth="Infinity" onAction="#onOpenLogsFolder"/>
+                        <Button fx:id="gameFolderButton" text="Ouvrir le dossier du jeu"
+                                styleClass="btn-ghost" maxWidth="Infinity"
+                                onAction="#onOpenGameFolder"/>
+                        <Button fx:id="reinstallButton" text="Réinstaller le jeu"
+                                styleClass="btn-danger" maxWidth="Infinity"
+                                onAction="#onReinstall"/>
+                    </VBox>
+
+                </VBox>
+            </ScrollPane>
+        </VBox>
+    </StackPane>
+
+</StackPane>

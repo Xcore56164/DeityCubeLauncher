@@ -1,22 +1,19 @@
 package fr.deitycube.launcher.deitycube;
 
-import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.network.HttpDownloader;
 import fr.deitycube.launcher.progress.ProgressListener;
+import fr.deitycube.launcher.util.HashUtils;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 public final class DeityCubePackageInstaller {
 
@@ -25,20 +22,25 @@ public final class DeityCubePackageInstaller {
     public DeityCubePackageInstaller(
             Path gameDirectory
     ) {
-        this.gameDirectory = gameDirectory;
+        this.gameDirectory = gameDirectory.normalize();
     }
 
     public void install(
-            DeityCubePackage pack
+            DeityCubeManifest manifest,
+            DeityCubePackage profile
     ) throws IOException {
 
-        install(pack, ProgressListener.NONE);
+        install(manifest, profile, ProgressListener.NONE);
     }
 
     public void install(
-            DeityCubePackage pack,
+            DeityCubeManifest manifest,
+            DeityCubePackage profile,
             ProgressListener listener
     ) throws IOException {
+
+        DeityCubeCommonFiles common =
+                manifest.getCommon();
 
         System.out.println();
         System.out.println(
@@ -52,214 +54,251 @@ public final class DeityCubePackageInstaller {
         );
         System.out.println(
                 "Nom     : "
-                        + pack.getName()
+                        + profile.getName()
         );
         System.out.println(
                 "Version : "
-                        + pack.getVersion()
+                        + profile.getVersion()
         );
-
-        Path archive =
-                downloadPackage(
-                        pack,
-                        listener
-                );
-
-        listener.indeterminate(
-                "Installation du modpack",
-                "Extraction de " + pack.getFilename() + "..."
-        );
-
-        extractPackage(
-                archive
-        );
-    }
-
-    private Path downloadPackage(
-            DeityCubePackage pack,
-            ProgressListener listener
-    ) throws IOException {
-
-        Path destination =
-                GameDirectory
-                        .getCacheDirectory()
-                        .resolve("deitycube")
-                        .resolve(
-                                pack.getFilename()
-                        );
-
-        if (Files.isRegularFile(destination)
-                && HttpDownloader.verifySha256(
-                        destination,
-                        pack.getSha256()
-                )) {
-
-            System.out.println(
-                    "Archive déjà présente et valide : "
-                            + destination.getFileName()
-            );
-
-            return destination;
-        }
-
         System.out.println(
-                "Téléchargement modpack : "
-                        + pack.getFilename()
+                "Fichiers communs : "
+                        + common.getFiles().size()
         );
-
-        listener.phase("Téléchargement du modpack");
-
-        HttpDownloader.downloadSha256(
-                pack.getDownloadUrl(),
-                destination,
-                pack.getSha256(),
-                bytes -> listener.update(
-                        "Téléchargement du modpack",
-                        pack.getFilename(),
-                        bytes,
-                        -1
-                )
+        System.out.println(
+                "Fichiers du profil : "
+                        + profile.getFiles().size()
         );
-
-        return destination;
-    }
-
-    private void extractPackage(
-            Path archive
-    ) throws IOException {
 
         Set<String> managedPaths =
                 new HashSet<>();
 
-        Set<String> managedRoots =
-                new HashSet<>();
+        InstallCounters counters =
+                new InstallCounters();
 
-        int extractedCount = 0;
+        counters.total =
+                common.getFiles().size()
+                        + profile.getFiles().size();
 
-        try (ZipFile zipFile =
-                     new ZipFile(archive.toFile())) {
+        listener.phase("Téléchargement du modpack");
 
-            String wrapperPrefix =
-                    detectWrapperPrefix(zipFile);
+        installGroup(
+                common.getBaseUrl(),
+                common.getFiles(),
+                managedPaths,
+                counters,
+                listener
+        );
 
-            Enumeration<? extends ZipEntry> entries =
-                    zipFile.entries();
+        installGroup(
+                profile.getBaseUrl(),
+                profile.getFiles(),
+                managedPaths,
+                counters,
+                listener
+        );
 
-            while (entries.hasMoreElements()) {
-
-                ZipEntry entry =
-                        entries.nextElement();
-
-                if (entry.isDirectory()) {
-                    continue;
-                }
-
-                String relativePath =
-                        wrapperPrefix != null
-                                ? entry.getName().substring(
-                                        wrapperPrefix.length()
-                                )
-                                : entry.getName();
-
-                if (relativePath.isBlank()) {
-                    continue;
-                }
-
-                boolean playerManaged =
-                        isPlayerManaged(relativePath);
-
-                Path destination =
-                        gameDirectory.resolve(
-                                relativePath
-                        );
-
-                if (!playerManaged
-                        || !Files.isRegularFile(destination)) {
-
-                    Files.createDirectories(
-                            destination.getParent()
-                    );
-
-                    try (InputStream input =
-                                 zipFile.getInputStream(entry)) {
-
-                        Files.copy(
-                                input,
-                                destination,
-                                StandardCopyOption.REPLACE_EXISTING
-                        );
-                    }
-
-                    extractedCount++;
-                }
-
-                managedPaths.add(relativePath);
-
-                if (!playerManaged) {
-
-                    managedRoots.add(
-                            topLevelSegment(relativePath)
-                    );
-                }
-            }
-        }
-
+        System.out.println();
         System.out.println(
-                "Fichiers installés : "
-                        + extractedCount
+                "Fichiers téléchargés  : "
+                        + counters.downloaded
+        );
+        System.out.println(
+                "Fichiers déjà valides : "
+                        + counters.alreadyValid
+        );
+
+        listener.indeterminate(
+                "Installation du modpack",
+                "Nettoyage des fichiers obsolètes..."
         );
 
         pruneOrphans(
-                managedRoots,
+                collectAllRoots(manifest),
                 managedPaths
         );
     }
 
-    private String detectWrapperPrefix(
-            ZipFile zipFile
-    ) {
+    private void installGroup(
+            String baseUrl,
+            List<DeityCubePackageFile> files,
+            Set<String> managedPaths,
+            InstallCounters counters,
+            ProgressListener listener
+    ) throws IOException {
 
-        String wrapperPrefix = null;
+        for (DeityCubePackageFile file : files) {
 
-        Enumeration<? extends ZipEntry> entries =
-                zipFile.entries();
+            counters.current++;
 
-        while (entries.hasMoreElements()) {
+            String relativePath =
+                    file.getPath();
 
-            ZipEntry entry =
-                    entries.nextElement();
+            boolean playerManaged =
+                    isPlayerManaged(relativePath);
 
-            if (entry.isDirectory()) {
+            Path destination =
+                    resolveSafely(relativePath);
+
+            listener.update(
+                    "Téléchargement du modpack",
+                    relativePath,
+                    counters.current,
+                    counters.total
+            );
+
+            if (playerManaged
+                    && Files.isRegularFile(destination)) {
+
+                managedPaths.add(relativePath);
                 continue;
             }
 
-            String name =
-                    entry.getName();
+            if (isValid(destination, file)) {
 
-            int separatorIndex =
-                    name.indexOf('/');
+                counters.alreadyValid++;
 
-            if (separatorIndex < 0) {
-                return null;
+            } else {
+
+                System.out.println(
+                        "Téléchargement : "
+                                + relativePath
+                );
+
+                HttpDownloader.downloadSha256(
+                        buildFileUrl(
+                                baseUrl,
+                                relativePath
+                        ),
+                        destination,
+                        file.getSha256()
+                );
+
+                counters.downloaded++;
             }
 
-            String topLevel =
-                    name.substring(
-                            0,
-                            separatorIndex + 1
-                    );
+            managedPaths.add(relativePath);
+        }
+    }
 
-            if (wrapperPrefix == null) {
+    private Set<String> collectAllRoots(
+            DeityCubeManifest manifest
+    ) {
 
-                wrapperPrefix = topLevel;
+        Set<String> roots =
+                new HashSet<>();
 
-            } else if (!wrapperPrefix.equals(topLevel)) {
+        collectRoots(
+                manifest.getCommon().getFiles(),
+                roots
+        );
 
-                return null;
-            }
+        for (DeityCubePackage profile :
+                manifest.getProfiles().values()) {
+
+            collectRoots(
+                    profile.getFiles(),
+                    roots
+            );
         }
 
-        return wrapperPrefix;
+        return roots;
+    }
+
+    private void collectRoots(
+            List<DeityCubePackageFile> files,
+            Set<String> roots
+    ) {
+
+        for (DeityCubePackageFile file : files) {
+
+            if (!isPlayerManaged(file.getPath())) {
+
+                roots.add(
+                        topLevelSegment(file.getPath())
+                );
+            }
+        }
+    }
+
+    private boolean isValid(
+            Path file,
+            DeityCubePackageFile expected
+    ) throws IOException {
+
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+
+        if (expected.getSize() > 0
+                && Files.size(file) != expected.getSize()) {
+
+            return false;
+        }
+
+        return HashUtils.verifySha256(
+                file,
+                expected.getSha256()
+        );
+    }
+
+    private Path resolveSafely(
+            String relativePath
+    ) throws IOException {
+
+        Path destination =
+                gameDirectory.resolve(relativePath)
+                        .normalize();
+
+        if (!destination.startsWith(gameDirectory)) {
+
+            throw new IOException(
+                    "Chemin de fichier invalide "
+                            + "(hors du dossier de jeu) : "
+                            + relativePath
+            );
+        }
+
+        Path parent =
+                destination.getParent();
+
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+
+        return destination;
+    }
+
+    private String buildFileUrl(
+            String baseUrl,
+            String relativePath
+    ) {
+
+        StringBuilder url =
+                new StringBuilder(baseUrl);
+
+        if (url.charAt(url.length() - 1) != '/') {
+            url.append('/');
+        }
+
+        String[] segments =
+                relativePath.split("/");
+
+        for (int i = 0; i < segments.length; i++) {
+
+            if (i > 0) {
+                url.append('/');
+            }
+
+            url.append(
+                    URLEncoder.encode(
+                                    segments[i],
+                                    StandardCharsets.UTF_8
+                            )
+                            .replace("+", "%20")
+            );
+        }
+
+        return url.toString();
     }
 
     private void pruneOrphans(
@@ -329,5 +368,13 @@ public final class DeityCubePackageInstaller {
         return separatorIndex < 0
                 ? relativePath
                 : relativePath.substring(0, separatorIndex);
+    }
+
+    private static final class InstallCounters {
+
+        private int current;
+        private int total;
+        private int downloaded;
+        private int alreadyValid;
     }
 }
