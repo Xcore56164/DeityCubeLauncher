@@ -125,6 +125,31 @@ won't be offered the update until it's added. `sha256` is the checksum of the co
 installer file (e.g. `sha256sum file` on Linux, `Get-FileHash file -Algorithm SHA256` on
 Windows).
 
+### Deploying a release to the server
+
+[scripts/launcher-deploy.sh](scripts/launcher-deploy.sh) automates the manifest step above: run
+on the VPS after tagging and pushing a release, it downloads that release's installers from
+GitHub and regenerates `launcher_manifest.json` for you (SHA-256 included, release notes pulled
+from the GitHub Release body).
+
+One-time setup on the VPS:
+
+```bash
+sudo cp scripts/launcher-deploy.sh /usr/local/bin/launcher-deploy
+sudo chmod +x /usr/local/bin/launcher-deploy
+sudo apt install -y jq   # required, curl/sha256sum are normally already present
+```
+
+Adjust `DOWNLOADS_DIR` (where `https://deitycube.fr/downloads/` is actually served from) if it
+isn't `/var/www/deitycube/downloads` — either edit the defaults at the top of the script, or
+override them in `/etc/deitycube/launcher-deploy.conf`.
+
+Usage, after a release has finished building in CI:
+
+```bash
+launcher-deploy 1.1.0
+```
+
 ## License
 
 All rights reserved — see [LICENSE](LICENSE). This repository is visible for reference

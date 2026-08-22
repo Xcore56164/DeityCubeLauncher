@@ -83,8 +83,6 @@ public final class NativeDetector {
 
         String name = lowerCaseName(library);
 
-        // Selon la version de Minecraft, Mojang republie LWJGL sous "natives-osx"
-        // (versions plus anciennes) ou "natives-macos" (versions récentes).
         if (name == null
                 || !(name.contains("natives-osx") || name.contains("natives-macos"))) {
             return false;
