@@ -143,12 +143,26 @@ public final class LauncherApp extends Application {
 
         try {
 
+            System.out.println("Fond vidéo : chargement depuis " + videoUrl);
+
             Media media = new Media(videoUrl.toExternalForm());
             MediaPlayer player = new MediaPlayer(media);
 
             player.setMute(true);
             player.setCycleCount(MediaPlayer.INDEFINITE);
             player.setAutoPlay(true);
+
+            player.setOnError(() ->
+                    System.err.println(
+                            "Fond vidéo : erreur de lecture - " + player.getError()
+                    )
+            );
+
+            media.setOnError(() ->
+                    System.err.println(
+                            "Fond vidéo : erreur média - " + media.getError()
+                    )
+            );
 
             MediaView view = new MediaView(player);
             view.setPreserveRatio(false);
@@ -158,6 +172,10 @@ public final class LauncherApp extends Application {
 
                 double videoWidth = media.getWidth();
                 double videoHeight = media.getHeight();
+
+                System.out.println(
+                        "Fond vidéo : prêt (" + videoWidth + "x" + videoHeight + ")"
+                );
 
                 if (videoWidth <= 0 || videoHeight <= 0) {
                     return;
