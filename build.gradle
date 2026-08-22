@@ -15,7 +15,7 @@ plugins {
 apply plugin: 'org.openjfx.javafxplugin'
 
 group = 'fr.deitycube'
-version = '1.0.1'
+version = '1.0.2'
 
 repositories {
     mavenCentral()
@@ -71,27 +71,15 @@ tasks.register('createInstaller') {
     def outputDir = layout.buildDirectory.dir('jpackage')
     def runtimeImageDir = layout.buildDirectory.dir('jpackage-runtime')
 
-    // IMPORTANT : on résout le JDK via le toolchain (celui qui compile l'app), pas via
-    // System.getProperty('java.home') — ce dernier reflète le JVM du démon Gradle, qui peut
-    // être n'importe quel JDK installé sur la machine (plusieurs démons coexistent souvent),
-    // pas forcément celui du toolchain. Un mismatch produirait un runtime empaqueté d'une
-    // version différente du bytecode compilé (--release 21), donc une UnsupportedClassVersionError.
     def javaLauncher = javaToolchains.launcherFor(java.toolchain)
 
     def winIconFile = file('src/main/resources/fr/deitycube/launcher/ui/assets/logo.ico')
     def linuxIconFile = file('src/main/resources/fr/deitycube/launcher/ui/assets/logo.png')
 
-    // GUID fixe utilisé par WiX pour reconnaître les installations d'une même app.
-    // NE JAMAIS LE CHANGER entre deux versions : c'est ce qui permet à une mise à jour
-    // silencieuse (voir LauncherUpdater) de remplacer l'installation existante au lieu
-    // d'en créer une nouvelle à côté.
     def winUpgradeUuid = '5B1F3E6B-6C1E-4B0E-9C7A-2B7B7E9C7D1A'
 
-    // Nom de paquet Debian : doit être en minuscules, contrairement à project.name.
     def linuxPackageName = 'deitycubelauncher'
 
-    // Adresse de contact publique visible dans les métadonnées du .deb (dpkg -I) —
-    // à remplacer par une vraie adresse de support avant publication.
     def linuxMaintainer = 'DeityCube <deitycube@gmail.com>'
 
     doLast {
@@ -103,12 +91,6 @@ tasks.register('createInstaller') {
         def jlinkBin = "${javaHome}/bin/jlink${exeSuffix}"
         def jmodsDir = "${javaHome}/jmods"
 
-        // Sans --runtime-image, jpackage se construit lui-même un runtime minimal qui NE
-        // CONTIENT PAS java(.exe) (seulement les .dll/.so) : notre code lance pourtant des
-        // sous-process Java (MinecraftLauncher, NeoForgeProcessorExecutor) via
-        // <java.home>/bin/java(.exe), ce qui échoue une fois packagé. On construit donc
-        // nous-mêmes un runtime complet avec jlink (qui conserve java(.exe) par défaut), à
-        // partir du JDK du toolchain (voir javaLauncher ci-dessus).
         def runtimeImagePath = runtimeImageDir.get().asFile
         delete(runtimeImagePath)
 

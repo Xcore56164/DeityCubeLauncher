@@ -123,8 +123,6 @@ public final class LauncherLogger {
 
         private void writeToFile(String text) {
 
-            // Les flux out et err partagent le même fichier : on synchronise sur ce fichier
-            // (pas sur `this`) pour que leurs écritures ne s'entrelacent jamais.
             synchronized (file) {
 
                 try {

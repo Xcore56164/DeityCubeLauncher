@@ -32,12 +32,6 @@ public final class LauncherUpdater {
         return platformKey != null && manifest.getTarget(platformKey) != null ? manifest : null;
     }
 
-    /**
-     * @return {@code true} si la mise à jour a été appliquée en silence et que l'appelant doit
-     * s'attendre à ce que le processus se termine (Windows) ; {@code false} si l'installation a
-     * simplement été déléguée au gestionnaire de paquets graphique du système et que l'appelant
-     * doit informer l'utilisateur de terminer manuellement (Linux).
-     */
     public boolean downloadAndApply(
             LauncherUpdateManifest update,
             ProgressListener listener
@@ -162,9 +156,6 @@ public final class LauncherUpdater {
 
         listener.indeterminate("Mise à jour", "Ouverture du gestionnaire de paquets...");
 
-        // dpkg/rpm exigent les droits root : impossible d'installer en silence comme sur Windows.
-        // xdg-open délègue au gestionnaire graphique du système (GNOME Software, Discover...),
-        // qui demandera lui-même l'élévation à l'utilisateur.
         new ProcessBuilder("xdg-open", packagePath.toAbsolutePath().toString()).start();
     }
 

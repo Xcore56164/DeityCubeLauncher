@@ -1,6 +1,7 @@
 package fr.deitycube.launcher.minecraft.natives;
 
 import fr.deitycube.launcher.filesystem.GameDirectory;
+import fr.deitycube.launcher.minecraft.platform.OperatingSystem;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,7 +60,7 @@ public final class NativeExtractor {
                     continue;
                 }
 
-                if (!entryName.toLowerCase().endsWith(".dll")) {
+                if (!entryName.toLowerCase().endsWith(nativeLibraryExtension())) {
                     continue;
                 }
 
@@ -93,5 +94,15 @@ public final class NativeExtractor {
                 );
             }
         }
+    }
+
+    private static String nativeLibraryExtension() {
+
+        return switch (OperatingSystem.current()) {
+            case WINDOWS -> ".dll";
+            case LINUX -> ".so";
+            case MACOS -> ".dylib";
+            case UNKNOWN -> "";
+        };
     }
 }

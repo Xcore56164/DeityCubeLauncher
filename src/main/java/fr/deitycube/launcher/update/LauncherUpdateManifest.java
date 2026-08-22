@@ -23,8 +23,6 @@ public final class LauncherUpdateManifest {
         return notes;
     }
 
-    // Toute clé du JSON autre que "version"/"notes" (ex: "windows", "linux_deb", "linux_rpm")
-    // est collectée ici, sans avoir à faire évoluer ce POJO à chaque nouvelle plateforme.
     @JsonAnySetter
     public void setTarget(String platformKey, LauncherUpdateTarget target) {
         targets.put(platformKey, target);

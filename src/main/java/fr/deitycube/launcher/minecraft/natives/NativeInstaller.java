@@ -36,7 +36,7 @@ public class NativeInstaller {
 
             current++;
 
-            if (!NativeDetector.isWindowsNative(library)) {
+            if (!NativeDetector.isNativeForCurrentPlatform(library)) {
                 continue;
             }
 
