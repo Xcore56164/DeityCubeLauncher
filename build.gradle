@@ -32,7 +32,7 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 application {
-    mainClass = 'fr.deitycube.launcher.ui.LauncherApp'
+    mainClass = 'fr.deitycube.launcher.Main'
 }
 
 javafx {
@@ -95,7 +95,7 @@ tasks.register('createInstaller') {
                 '--dest', outputDir.get().asFile.absolutePath,
                 '--name', project.name,
                 '--main-jar', "${project.name}-${project.version}.jar",
-                '--main-class', 'fr.deitycube.launcher.ui.LauncherApp',
+                '--main-class', 'fr.deitycube.launcher.Main',
                 '--app-version', project.version.toString(),
                 '--vendor', 'DeityCube',
                 '--description', 'Official launcher for the DeityCube modpack',
