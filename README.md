@@ -22,9 +22,13 @@ then launches the game — no manual file handling required.
 - Multiple modpack profiles to choose from (server-defined via the DeityCube manifest).
 - Adjustable allocated RAM, option to keep the launcher open while the game is running.
 - **Built-in self-update**: the launcher checks for a new version on startup and offers to
-  install it (download verified by SHA-256). On Windows this is fully silent with an automatic
-  restart; on Linux the downloaded `.deb`/`.rpm` is handed off to your system's package manager,
-  which will ask for your password to finish the install.
+  install it (download verified by SHA-256). On Windows the installer launches with a visible
+  progress bar and the launcher closes, ready for you to relaunch once it's done; on Linux the
+  downloaded `.deb`/`.rpm` is handed off to your system's package manager, which will ask for
+  your password to finish the install. Neither platform waits on or auto-restarts after the
+  installer: on Windows in particular, the update is a major-upgrade MSI (uninstalls the old
+  version before installing the new one), and blocking on that process while an antivirus might
+  kill it mid-way is a good way to end up with neither version installed.
 - Dedicated **logs** for every run (launcher and game), viewable directly from the launcher
   settings.
 
@@ -51,7 +55,9 @@ installer: no separate Java installation is needed on either platform.
 The launcher automatically checks whether a new version is available every time it starts. If
 one is found, it asks for confirmation before downloading it.
 
-- **Windows**: the update installs silently and the launcher restarts on its own.
+- **Windows**: the installer launches (visible progress bar, no input needed) and the launcher
+  closes right away — it does not wait for the install to finish, so relaunch DeityCube Launcher
+  yourself once it's done.
 - **Linux**: since installing a `.deb`/`.rpm` requires root privileges, the downloaded package
   is opened with your desktop's package manager (GNOME Software, Discover...) instead — approve
   the installation there, then relaunch DeityCube Launcher yourself.

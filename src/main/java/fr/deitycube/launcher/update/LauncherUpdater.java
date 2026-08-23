@@ -32,10 +32,22 @@ public final class LauncherUpdater {
         return platformKey != null && manifest.getTarget(platformKey) != null ? manifest : null;
     }
 
-    public boolean downloadAndApply(
+    /**
+     * Télécharge la mise à jour et démarre son installation, sans attendre qu'elle se termine.
+     * <p>
+     * L'installeur Windows (WiX) fait une mise à niveau majeure MSI : il désinstalle l'ancienne
+     * version puis installe la nouvelle. Si on reste bloqué à attendre ce process (par ex. avec
+     * {@code Process.waitFor()}) et qu'un antivirus le tue entre-temps — ce qui arrive plus
+     * souvent qu'on ne le voudrait pour un exécutable fraîchement téléchargé et non signé — le
+     * launcher se retrouve désinstallé sans que la nouvelle version ait pu s'installer. Se
+     * désengager immédiatement après avoir lancé l'installeur (au lieu d'attendre dessus puis de
+     * relancer automatiquement) évite ce scénario : l'installation continue de façon
+     * indépendante, et c'est à l'utilisateur de relancer le launcher une fois terminée.
+     */
+    public void downloadAndApply(
             LauncherUpdateManifest update,
             ProgressListener listener
-    ) throws IOException, InterruptedException {
+    ) throws IOException {
 
         String platformKey = resolvePlatformKey();
 
@@ -47,17 +59,11 @@ public final class LauncherUpdater {
 
         LauncherUpdateTarget target = requireTarget(update, platformKey);
 
-        return switch (OperatingSystem.current()) {
-            case WINDOWS -> {
-                applyWindowsUpdate(update, target, listener);
-                yield true;
-            }
-            case LINUX -> {
-                applyLinuxUpdate(update, target, listener, platformKey);
-                yield false;
-            }
+        switch (OperatingSystem.current()) {
+            case WINDOWS -> applyWindowsUpdate(update, target, listener);
+            case LINUX -> applyLinuxUpdate(update, target, listener, platformKey);
             default -> throw new IOException("Mise à jour automatique non prise en charge sur cet OS.");
-        };
+        }
     }
 
     private LauncherUpdateTarget requireTarget(
@@ -90,7 +96,7 @@ public final class LauncherUpdater {
             LauncherUpdateManifest update,
             LauncherUpdateTarget target,
             ProgressListener listener
-    ) throws IOException, InterruptedException {
+    ) throws IOException {
 
         listener.indeterminate("Mise à jour", "Téléchargement de la version " + update.getVersion() + "...");
 
@@ -108,25 +114,18 @@ public final class LauncherUpdater {
                 )
         );
 
-        listener.indeterminate("Mise à jour", "Installation en cours...");
+        listener.indeterminate("Mise à jour", "Lancement de l'installeur...");
 
-        Process installerProcess = new ProcessBuilder(
+        // /passive (barre de progression visible, sans interaction requise) plutôt que /quiet :
+        // un process totalement invisible qui s'exécute juste après le téléchargement d'un
+        // fichier ressemble beaucoup plus à un comportement de malware aux yeux d'un antivirus
+        // qu'une installation avec une fenêtre visible, ce qui réduit le risque qu'il soit tué
+        // en cours de route.
+        new ProcessBuilder(
                 installerPath.toAbsolutePath().toString(),
-                "/quiet",
+                "/passive",
                 "/norestart"
         ).start();
-
-        int exitCode = installerProcess.waitFor();
-
-        if (exitCode != 0) {
-            throw new IOException(
-                    "L'installeur de mise à jour s'est terminé avec le code " + exitCode
-            );
-        }
-
-        listener.indeterminate("Mise à jour", "Redémarrage du launcher...");
-
-        relaunchWindowsAndExit();
     }
 
     private void applyLinuxUpdate(
@@ -156,6 +155,9 @@ public final class LauncherUpdater {
 
         listener.indeterminate("Mise à jour", "Ouverture du gestionnaire de paquets...");
 
+        // dpkg/rpm exigent les droits root : impossible d'installer en silence comme sur Windows.
+        // xdg-open délègue au gestionnaire graphique du système (GNOME Software, Discover...),
+        // qui demandera lui-même l'élévation à l'utilisateur.
         new ProcessBuilder("xdg-open", packagePath.toAbsolutePath().toString()).start();
     }
 
@@ -194,32 +196,5 @@ public final class LauncherUpdater {
         }
 
         return false;
-    }
-
-    private void relaunchWindowsAndExit() throws IOException {
-
-        String localAppData = System.getenv("LOCALAPPDATA");
-
-        if (localAppData == null || localAppData.isBlank()) {
-            throw new IOException(
-                    "Impossible de déterminer le dossier LOCALAPPDATA pour relancer le launcher."
-            );
-        }
-
-        Path executable = Path.of(
-                localAppData,
-                LauncherConfig.LAUNCHER_INSTALL_NAME,
-                LauncherConfig.LAUNCHER_INSTALL_NAME + ".exe"
-        );
-
-        if (!Files.isRegularFile(executable)) {
-            throw new IOException(
-                    "Exécutable du launcher introuvable après la mise à jour : " + executable
-            );
-        }
-
-        new ProcessBuilder(executable.toAbsolutePath().toString()).start();
-
-        System.exit(0);
     }
 }

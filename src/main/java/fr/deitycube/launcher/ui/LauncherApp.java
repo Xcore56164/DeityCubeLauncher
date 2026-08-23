@@ -1,6 +1,7 @@
 package fr.deitycube.launcher.ui;
 
 import fr.deitycube.launcher.auth.AuthenticationResult;
+import fr.deitycube.launcher.config.AppVersion;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.logging.LauncherLogger;
 import fr.deitycube.launcher.minecraft.platform.OperatingSystem;
@@ -28,7 +29,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.image.Image;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -55,7 +55,6 @@ public final class LauncherApp extends Application {
     private Stage stage;
     private StackPane contentArea;
     private Label deityCubeVersionLabel;
-    private Label gameVersionsLabel;
 
     private LauncherSettings settings;
     private DeityCubeManifest manifest;
@@ -85,7 +84,7 @@ public final class LauncherApp extends Application {
                 ).toExternalForm()
         );
 
-        primaryStage.setTitle("DeityCube Launcher");
+        primaryStage.setTitle("DeityCube Launcher  v" + AppVersion.CURRENT);
         primaryStage.setResizable(true);
         primaryStage.setMinWidth(1000);
         primaryStage.setMinHeight(620);
@@ -206,31 +205,27 @@ public final class LauncherApp extends Application {
         }
     }
 
-    private BorderPane buildFooter() {
+    private Region buildFooter() {
 
-        BorderPane footer = new BorderPane();
+        StackPane footer = new StackPane();
         footer.getStyleClass().add("footer-bar");
 
         deityCubeVersionLabel = new Label("DeityCube —");
         deityCubeVersionLabel.getStyleClass().add("footer-label");
-
-        gameVersionsLabel = new Label("—");
-        gameVersionsLabel.getStyleClass().add("footer-label");
+        StackPane.setAlignment(deityCubeVersionLabel, Pos.CENTER_LEFT);
 
         Label siteLink = new Label("deitycube.fr");
         siteLink.getStyleClass().add("footer-link");
         siteLink.setOnMouseClicked(event -> openWebsite());
+        StackPane.setAlignment(siteLink, Pos.CENTER);
 
-        HBox center = new HBox(siteLink);
-        center.setAlignment(Pos.CENTER);
+        Label licenseLabel = new Label(
+                "© " + java.time.Year.now().getValue() + " DeityCube — Tous droits réservés"
+        );
+        licenseLabel.getStyleClass().add("footer-label");
+        StackPane.setAlignment(licenseLabel, Pos.CENTER_RIGHT);
 
-        BorderPane.setAlignment(deityCubeVersionLabel, Pos.CENTER_LEFT);
-        BorderPane.setAlignment(gameVersionsLabel, Pos.CENTER_RIGHT);
-
-        footer.setLeft(deityCubeVersionLabel);
-        footer.setCenter(center);
-        footer.setRight(gameVersionsLabel);
-        footer.setPadding(new Insets(0));
+        footer.getChildren().addAll(deityCubeVersionLabel, siteLink, licenseLabel);
 
         return footer;
     }
@@ -285,11 +280,6 @@ public final class LauncherApp extends Application {
 
             deityCubeVersionLabel.setText(
                     "DeityCube " + manifest.getModpackVersion()
-            );
-
-            gameVersionsLabel.setText(
-                    "Minecraft " + manifest.getMinecraftVersion()
-                            + "   •   NeoForge " + manifest.getNeoforgeVersion()
             );
         });
 
@@ -375,10 +365,6 @@ public final class LauncherApp extends Application {
         task.setOnSucceeded(event -> {
             manifest = task.getValue();
             deityCubeVersionLabel.setText("DeityCube " + manifest.getModpackVersion());
-            gameVersionsLabel.setText(
-                    "Minecraft " + manifest.getMinecraftVersion()
-                            + "   •   NeoForge " + manifest.getNeoforgeVersion()
-            );
             onReady.run();
         });
 
@@ -429,7 +415,7 @@ public final class LauncherApp extends Application {
 
     private void promptLauncherUpdate(LauncherUpdateManifest update) {
 
-        boolean assistedInstall = OperatingSystem.current() == OperatingSystem.LINUX;
+        boolean windows = OperatingSystem.current() == OperatingSystem.WINDOWS;
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Mise à jour disponible");
@@ -439,9 +425,9 @@ public final class LauncherApp extends Application {
                         ? update.getNotes() + "\n\n"
                         : "")
                         + "Voulez-vous l'installer maintenant ? "
-                        + (assistedInstall
-                                ? "Le gestionnaire de paquets de votre système s'ouvrira pour terminer l'installation."
-                                : "Le launcher redémarrera automatiquement.")
+                        + (windows
+                                ? "L'installeur se lancera puis le launcher se fermera ; relancez-le une fois la mise à jour terminée."
+                                : "Le gestionnaire de paquets de votre système s'ouvrira pour terminer l'installation.")
         );
 
         alert.showAndWait()
@@ -451,38 +437,48 @@ public final class LauncherApp extends Application {
 
     private void runLauncherUpdate(LauncherUpdateManifest update) {
 
-        Task<Boolean> task = new Task<>() {
+        Task<Void> task = new Task<>() {
             @Override
-            protected Boolean call() throws Exception {
+            protected Void call() throws Exception {
 
-                return new LauncherUpdater().downloadAndApply(update, (phase, detail, current, total) -> {
+                new LauncherUpdater().downloadAndApply(update, (phase, detail, current, total) -> {
                     updateTitle(phase);
                     updateMessage(detail);
                     updateProgress(-1, 1);
                 });
+
+                return null;
             }
         };
 
         Stage progressDialog = showUpdateProgressDialog(task);
 
-        // Sur Windows, downloadAndApply() ne revient jamais en cas de succès : l'installeur
-        // redémarre déjà le launcher et le processus courant se termine avant onSucceeded.
-        // Sur Linux, elle revient (installation déléguée au gestionnaire de paquets graphique),
-        // donc on informe l'utilisateur de terminer manuellement.
+        // downloadAndApply() ne fait que démarrer l'installation puis revient immédiatement,
+        // sur les deux OS : on n'attend jamais la fin de l'installeur dans ce process (voir le
+        // commentaire de LauncherUpdater.downloadAndApply pour la raison — un antivirus qui tue
+        // l'installeur pendant qu'on attend dessus peut laisser le launcher désinstallé sans que
+        // la nouvelle version ait pu s'installer). C'est donc toujours à l'utilisateur de
+        // relancer le launcher une fois l'installation terminée de son côté.
         task.setOnSucceeded(event -> {
 
             progressDialog.close();
 
-            if (Boolean.FALSE.equals(task.getValue())) {
+            boolean windows = OperatingSystem.current() == OperatingSystem.WINDOWS;
 
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Mise à jour");
-                alert.setHeaderText("Terminez l'installation");
-                alert.setContentText(
-                        "Le paquet a été téléchargé et ouvert avec votre gestionnaire de paquets. "
-                                + "Terminez l'installation puis relancez DeityCube Launcher."
-                );
-                alert.showAndWait();
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Mise à jour");
+            alert.setHeaderText("Terminez l'installation");
+            alert.setContentText(
+                    windows
+                            ? "L'installeur a démarré indépendamment du launcher, qui va maintenant se "
+                                    + "fermer. Relancez DeityCube Launcher une fois la mise à jour terminée."
+                            : "Le paquet a été téléchargé et ouvert avec votre gestionnaire de paquets. "
+                                    + "Terminez l'installation puis relancez DeityCube Launcher."
+            );
+            alert.showAndWait();
+
+            if (windows) {
+                Platform.exit();
             }
         });
 
@@ -496,7 +492,7 @@ public final class LauncherApp extends Application {
         thread.start();
     }
 
-    private Stage showUpdateProgressDialog(Task<Boolean> task) {
+    private Stage showUpdateProgressDialog(Task<Void> task) {
 
         Label titleLabel = new Label("Mise à jour du launcher...");
         titleLabel.getStyleClass().add("welcome-label");

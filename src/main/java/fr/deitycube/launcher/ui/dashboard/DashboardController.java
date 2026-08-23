@@ -1,6 +1,7 @@
 package fr.deitycube.launcher.ui.dashboard;
 
 import com.sun.management.OperatingSystemMXBean;
+import fr.deitycube.launcher.config.AppVersion;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.minecraft.MinecraftResolvedVersion;
@@ -144,7 +145,8 @@ public final class DashboardController {
         buildProfileToggle(profiles, initialProfile);
 
         versionsInfoLabel.setText(
-                "Minecraft " + manifest.getMinecraftVersion()
+                "DeityCube Launcher v" + AppVersion.CURRENT
+                        + "\nMinecraft " + manifest.getMinecraftVersion()
                         + "\nNeoForge " + manifest.getNeoforgeVersion()
                         + "\nModpack DeityCube " + manifest.getModpackVersion()
         );

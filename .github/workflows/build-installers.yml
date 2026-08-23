@@ -23,8 +23,17 @@ jobs:
         shell: pwsh
         run: echo "$env:WIX\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      # Le nom des fichiers générés (jar/.exe) doit toujours correspondre au tag qui a déclenché
+      # le build, jamais à un numéro de version oublié dans build.gradle.
       - name: Build Windows installer
-        run: ./gradlew.bat createInstaller --no-daemon
+        shell: pwsh
+        run: |
+          $gradleArgs = @('createInstaller', '--no-daemon')
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+            $gradleArgs += "-PreleaseVersion=$version"
+          }
+          ./gradlew.bat @gradleArgs
 
       - uses: actions/upload-artifact@v7
         with:
@@ -48,10 +57,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot
 
+      # Le nom des fichiers générés (jar/.deb/.rpm) doit toujours correspondre au tag qui a
+      # déclenché le build, jamais à un numéro de version oublié dans build.gradle.
       - name: Build Linux installers
         run: |
           chmod +x ./gradlew
-          ./gradlew createInstaller --no-daemon
+          gradle_args=(createInstaller --no-daemon)
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            gradle_args+=("-PreleaseVersion=$version")
+          fi
+          ./gradlew "${gradle_args[@]}"
 
       - uses: actions/upload-artifact@v7
         with:
