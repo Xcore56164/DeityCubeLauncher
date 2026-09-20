@@ -15,13 +15,7 @@ plugins {
 apply plugin: 'org.openjfx.javafxplugin'
 
 group = 'fr.deitycube'
-
-// La CI passe -PreleaseVersion=<tag sans le 'v'> lors d'un build déclenché par un tag, pour
-// garantir que le nom des fichiers générés (jar, .exe, .deb, .rpm) correspond TOUJOURS au tag
-// git/à la release GitHub — plus besoin (ni possibilité d'oublier) de mettre ce numéro à jour
-// manuellement avant de tagger. La valeur ci-dessous n'est utilisée que pour les builds locaux
-// (./gradlew run, etc.), jamais pour une release.
-version = project.hasProperty('releaseVersion') ? project.releaseVersion : '1.0.4-dev'
+version = project.hasProperty('releaseVersion') ? project.releaseVersion : '1.0.6-dev'
 
 repositories {
     mavenCentral()

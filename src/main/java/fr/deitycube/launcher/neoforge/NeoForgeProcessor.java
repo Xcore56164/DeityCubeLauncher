@@ -67,6 +67,24 @@ public final class NeoForgeProcessor {
             ProgressListener listener
     ) throws IOException, InterruptedException {
 
+        pathResolver.register(
+                "INSTALLER",
+                installer
+        );
+
+        registerDataTokens();
+
+        if (clientArtifactsValid()) {
+
+            System.out.println();
+            System.out.println(
+                    "Artefacts client NeoForge déjà "
+                            + "présents, processors ignorés."
+            );
+
+            return;
+        }
+
         listener.indeterminate(
                 "Préparation NeoForge",
                 "Téléchargement des bibliothèques NeoForge..."
@@ -78,13 +96,6 @@ public final class NeoForgeProcessor {
         for (NeoForgeLibrary library : libraries) {
             downloadLibrary(library);
         }
-
-        pathResolver.register(
-                "INSTALLER",
-                installer
-        );
-
-        registerDataTokens();
 
         List<NeoForgeProcessorDefinition> processors =
                 readClientProcessors();
@@ -175,6 +186,22 @@ public final class NeoForgeProcessor {
                 );
             }
         }
+    }
+
+    private boolean clientArtifactsValid() {
+
+        for (Path artifact : List.of(
+                getPatchedClientPath(),
+                getSrgClientPath(),
+                getExtraClientPath()
+        )) {
+
+            if (!Files.isRegularFile(artifact)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private Path getPatchedClientPath() {
