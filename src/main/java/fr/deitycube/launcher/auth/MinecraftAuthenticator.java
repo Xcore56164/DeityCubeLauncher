@@ -64,6 +64,24 @@ public class MinecraftAuthenticator {
                         + response.statusCode()
         );
 
+        // "Invalid app registration" : l'application Azure de DeityCube n'est pas (encore)
+        // autorisée par Mojang à utiliser Minecraft Services.
+        if (response.statusCode() == 403) {
+
+            throw new IOException(
+                    "La connexion aux comptes Minecraft officiels n'est pas encore ouverte : "
+                            + "DeityCube attend l'autorisation de Mojang."
+            );
+        }
+
+        if (response.statusCode() == 429) {
+
+            throw new IOException(
+                    "Minecraft Services refuse temporairement les connexions (trop de demandes). "
+                            + "Réessaie dans quelques minutes."
+            );
+        }
+
         JsonNode root =
                 OBJECT_MAPPER.readTree(
                         response.body()

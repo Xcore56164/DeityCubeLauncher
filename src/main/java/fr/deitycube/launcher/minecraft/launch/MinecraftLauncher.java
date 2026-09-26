@@ -1,5 +1,6 @@
 package fr.deitycube.launcher.minecraft.launch;
 
+import fr.deitycube.launcher.auth.AuthenticationMode;
 import fr.deitycube.launcher.auth.AuthenticationResult;
 import fr.deitycube.launcher.config.LauncherConfig;
 import fr.deitycube.launcher.filesystem.GameDirectory;
@@ -253,7 +254,7 @@ public final class MinecraftLauncher {
 
         placeholders.put(
                 "user_type",
-                "legacy"
+                authentication.getMode() == AuthenticationMode.OFFLINE ? "legacy" : "msa"
         );
 
         placeholders.put(

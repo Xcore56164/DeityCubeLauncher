@@ -45,6 +45,42 @@
             </HBox>
         </top>
 
+        <left>
+            <VBox styleClass="auth-card, profile-card" spacing="16" prefWidth="290" maxWidth="290"
+                  maxHeight="-Infinity" BorderPane.alignment="TOP_LEFT">
+                <BorderPane.margin>
+                    <Insets top="26" left="26"/>
+                </BorderPane.margin>
+
+                <HBox spacing="14" alignment="CENTER_LEFT">
+                    <StackPane styleClass="profile-avatar" minWidth="64" minHeight="64"
+                               prefWidth="64" prefHeight="64" maxWidth="64" maxHeight="64">
+                        <Label fx:id="avatarInitialLabel" styleClass="profile-avatar-initial"/>
+                        <ImageView fx:id="avatarView" fitWidth="64" fitHeight="64" preserveRatio="false"/>
+                    </StackPane>
+                    <VBox spacing="3">
+                        <Label fx:id="profilePseudoLabel" styleClass="profile-pseudo"/>
+                        <Label fx:id="profileRoleLabel" styleClass="profile-role"/>
+                    </VBox>
+                </HBox>
+
+                <VBox spacing="4">
+                    <Label text="COMPTE MICROSOFT" styleClass="section-label"/>
+                    <Label fx:id="microsoftValueLabel" styleClass="value-label" wrapText="true"/>
+                </VBox>
+
+                <VBox spacing="4">
+                    <Label text="EN JEU" styleClass="section-label"/>
+                    <Label fx:id="gameIdentityLabel" styleClass="value-label" wrapText="true"/>
+                    <Label fx:id="gameModeNoteLabel" styleClass="welcome-sub-label" wrapText="true"
+                           visible="false" managed="false"/>
+                </VBox>
+
+                <Label text="Gérer mon compte sur deitycube.fr" styleClass="footer-link"
+                       onMouseClicked="#onOpenAccountPage"/>
+            </VBox>
+        </left>
+
         <bottom>
             <VBox alignment="CENTER" spacing="0" pickOnBounds="false">
                 <padding>

@@ -2,6 +2,7 @@ package fr.deitycube.launcher.auth;
 
 public enum AuthenticationMode {
 
-    MICROSOFT,
+    /** Compte Minecraft officiel, via le DeityCompte (compte Microsoft lié sur deitycube.fr). */
+    DEITYCOMPTE,
     OFFLINE
 }

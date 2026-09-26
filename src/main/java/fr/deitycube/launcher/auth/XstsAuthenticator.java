@@ -77,6 +77,23 @@ public final class XstsAuthenticator {
                         response.body()
                 );
 
+        if (response.statusCode() == 401) {
+
+            String explanation = switch (root.path("XErr").asText("")) {
+                case "2148916233" -> "Ce compte Microsoft n'a pas encore de profil Xbox. "
+                        + "Connecte-toi une fois sur xbox.com pour le créer, puis réessaie.";
+                case "2148916235" -> "Xbox Live n'est pas disponible dans le pays de ce compte Microsoft.";
+                case "2148916236", "2148916237" -> "Ce compte Microsoft doit d'abord passer la vérification d'âge sur xbox.com.";
+                case "2148916238" -> "Ce compte Microsoft appartient à un mineur : un adulte doit l'ajouter "
+                        + "à une famille Microsoft (account.microsoft.com/family).";
+                default -> null;
+            };
+
+            if (explanation != null) {
+                throw new IOException(explanation);
+            }
+        }
+
         if (response.statusCode() != 200) {
 
             String xErr =

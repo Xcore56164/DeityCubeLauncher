@@ -6,36 +6,31 @@ import fr.deitycube.launcher.config.LauncherConfig;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class LauncherSettings {
 
-    private String authMode = "OFFLINE";
-    private String offlineUsername = "";
-    private String microsoftRefreshToken;
+    // Les champs des versions précédentes (authMode, offlineUsername, microsoftRefreshToken)
+    // sont ignorés à la lecture puis effacés au prochain enregistrement.
+    private String deityCompteEmail = "";
+    // Jeton de session DeityCompte ("Se souvenir de moi") : révocable depuis le site, il ne
+    // donne pas accès au mot de passe ni au compte Microsoft.
+    private String deityCompteSession;
     private String selectedProfile = LauncherConfig.DEFAULT_MODPACK_PROFILE;
     private int allocatedRamMb;
     private boolean keepLauncherOpenWhilePlaying = true;
     private boolean rememberMe = true;
 
-    public String getAuthMode() {
-        return authMode;
+    public String getDeityCompteEmail() {
+        return deityCompteEmail;
     }
 
-    public void setAuthMode(String authMode) {
-        this.authMode = authMode;
+    public void setDeityCompteEmail(String deityCompteEmail) {
+        this.deityCompteEmail = deityCompteEmail;
     }
 
-    public String getOfflineUsername() {
-        return offlineUsername;
+    public String getDeityCompteSession() {
+        return deityCompteSession;
     }
 
-    public void setOfflineUsername(String offlineUsername) {
-        this.offlineUsername = offlineUsername;
-    }
-
-    public String getMicrosoftRefreshToken() {
-        return microsoftRefreshToken;
-    }
-
-    public void setMicrosoftRefreshToken(String microsoftRefreshToken) {
-        this.microsoftRefreshToken = microsoftRefreshToken;
+    public void setDeityCompteSession(String deityCompteSession) {
+        this.deityCompteSession = deityCompteSession;
     }
 
     public String getSelectedProfile() {

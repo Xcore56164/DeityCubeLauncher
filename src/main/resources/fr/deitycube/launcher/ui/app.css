@@ -404,3 +404,37 @@
 .divider-line {
     -fx-background-color: rgba(255, 255, 255, 0.08);
 }
+
+/* ===== Profil DeityCompte (tableau de bord) ===== */
+
+.profile-card {
+    -fx-padding: 20;
+    -fx-background-color: -glass-strong;
+}
+
+.profile-avatar {
+    -fx-background-color: linear-gradient(to bottom right, -purple, -magenta);
+    -fx-background-radius: 32;
+    -fx-border-color: -gold;
+    -fx-border-radius: 32;
+    -fx-border-width: 2;
+}
+
+.profile-avatar-initial {
+    -fx-text-fill: white;
+    -fx-font-size: 26px;
+    -fx-font-weight: 800;
+}
+
+.profile-pseudo {
+    -fx-text-fill: white;
+    -fx-font-size: 18px;
+    -fx-font-weight: 800;
+}
+
+.profile-role {
+    -fx-text-fill: -gold-light;
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+    -fx-letter-spacing: 0.06em;
+}

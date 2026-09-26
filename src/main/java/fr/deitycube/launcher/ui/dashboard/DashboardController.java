@@ -1,7 +1,12 @@
 package fr.deitycube.launcher.ui.dashboard;
 
 import com.sun.management.OperatingSystemMXBean;
+import fr.deitycube.launcher.auth.AuthenticationMode;
+import fr.deitycube.launcher.auth.AuthenticationResult;
 import fr.deitycube.launcher.config.AppVersion;
+import fr.deitycube.launcher.config.LauncherConfig;
+import fr.deitycube.launcher.deitycompte.DeityCompteAccount;
+import fr.deitycube.launcher.deitycompte.DeityCompteException;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.minecraft.MinecraftResolvedVersion;
@@ -16,18 +21,22 @@ import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextArea;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
 
@@ -101,9 +110,92 @@ public final class DashboardController {
     @FXML
     private Button reinstallButton;
 
+    @FXML
+    private ImageView avatarView;
+
+    @FXML
+    private Label avatarInitialLabel;
+
+    @FXML
+    private Label profilePseudoLabel;
+
+    @FXML
+    private Label profileRoleLabel;
+
+    @FXML
+    private Label microsoftValueLabel;
+
+    @FXML
+    private Label gameIdentityLabel;
+
+    @FXML
+    private Label gameModeNoteLabel;
+
     private LauncherApp app;
     private final InstallationPipeline pipeline = new InstallationPipeline();
     private String selectedProfile;
+
+    /** Carte de profil DeityCompte : photo, pseudo, rôle, compte Microsoft, identité en jeu. */
+    private void showProfile(DeityCompteAccount account) {
+
+        profilePseudoLabel.setText(account.getPseudo());
+        profileRoleLabel.setText(account.getRole());
+
+        String pseudo = account.getPseudo();
+        avatarInitialLabel.setText(
+                pseudo.isEmpty() ? "?" : pseudo.substring(0, pseudo.offsetByCodePoints(0, 1)).toUpperCase()
+        );
+
+        avatarView.setClip(new Circle(32, 32, 32));
+
+        if (account.getAvatarUrl() != null) {
+            // Chargée en arrière-plan ; l'initiale reste visible tant qu'elle n'est pas prête
+            // (ou si le chargement échoue).
+            avatarView.setImage(new Image(account.getAvatarUrl(), 64, 64, false, true, true));
+        }
+
+        String gamertag = account.getMicrosoftGamertag();
+
+        microsoftValueLabel.setText(
+                gamertag == null
+                        ? "Non lié"
+                        : account.isMicrosoftRelinkRequired()
+                                ? gamertag + " — reconnexion nécessaire sur le site"
+                                : gamertag
+        );
+
+        // Avant le premier lancement : identité prévue (le jeu tente toujours le compte
+        // officiel d'abord, voir DeityCompteSession).
+        if (account.isMinecraftServicesEnabled() || !account.isOfflineFallbackAllowed()) {
+            gameIdentityLabel.setText(
+                    (account.getMinecraftName() != null ? account.getMinecraftName() : "Compte Minecraft")
+                            + " · compte officiel"
+            );
+        } else {
+            gameIdentityLabel.setText(account.getOfflineName() + " · mode hors ligne");
+        }
+    }
+
+    /** Après la connexion au jeu : identité réellement utilisée, et raison d'un mode hors ligne. */
+    private void showGameIdentity(AuthenticationResult authentication, String offlineReason) {
+
+        boolean offline = authentication.getMode() == AuthenticationMode.OFFLINE;
+
+        gameIdentityLabel.setText(
+                authentication.getUsername() + (offline ? " · mode hors ligne" : " · compte officiel")
+        );
+
+        gameModeNoteLabel.setText(
+                offline && offlineReason != null ? "Compte officiel indisponible : " + offlineReason : ""
+        );
+        gameModeNoteLabel.setVisible(offline && offlineReason != null);
+        gameModeNoteLabel.setManaged(offline && offlineReason != null);
+    }
+
+    @FXML
+    private void onOpenAccountPage() {
+        app.openUrl(LauncherConfig.WEBSITE_URL + "/compte/");
+    }
 
     public void init(LauncherApp app) {
 
@@ -111,10 +203,13 @@ public final class DashboardController {
 
         LauncherSettings settings = app.getSettings();
 
+        DeityCompteAccount account = app.getDeityCompteSession().getAccount();
+
         welcomeLabel.setText(
-                "Bonjour, " + app.getAuthentication().getUsername()
+                "Bonjour, " + account.getPseudo()
         );
 
+        showProfile(account);
         configureRamSlider(settings);
         clipToBounds(modalCard);
 
@@ -279,8 +374,7 @@ public final class DashboardController {
 
     @FXML
     private void onLogout() {
-        app.setAuthentication(null);
-        app.showLogin();
+        app.logout();
     }
 
     @FXML
@@ -369,10 +463,19 @@ public final class DashboardController {
         task.setOnSucceeded(event -> finishGameTask());
 
         task.setOnFailed(event -> {
+
             finishGameTask();
+
+            Throwable error = task.getException();
+
+            if (error instanceof DeityCompteException accountError) {
+                showAccountErrorDialog(accountError);
+                return;
+            }
+
             showErrorDialog(
                     reinstall ? "La réinstallation a échoué" : "Le lancement du jeu a échoué",
-                    task.getException()
+                    error
             );
         });
 
@@ -404,6 +507,37 @@ public final class DashboardController {
         Thread thread = new Thread(task, name);
         thread.setDaemon(true);
         thread.start();
+    }
+
+    /** Erreur venant du DeityCompte : message pour le joueur, et lien vers le site si besoin. */
+    private void showAccountErrorDialog(DeityCompteException error) {
+
+        if (error.isSessionInvalid()) {
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Session expirée");
+            alert.setHeaderText(null);
+            alert.setContentText(error.getMessage());
+            alert.showAndWait();
+
+            app.onDeityCompteSessionExpired();
+            return;
+        }
+
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle("Erreur");
+        alert.setHeaderText("Le lancement du jeu a échoué");
+        alert.setContentText(error.getMessage());
+
+        ButtonType openSite = new ButtonType("Ouvrir deitycube.fr", ButtonBar.ButtonData.OTHER);
+
+        if (error.getUrl() != null) {
+            alert.getButtonTypes().add(openSite);
+        }
+
+        alert.showAndWait()
+                .filter(button -> button == openSite)
+                .ifPresent(button -> app.openUrl(error.getUrl()));
     }
 
     private void showErrorDialog(String header, Throwable error) {
@@ -459,6 +593,25 @@ public final class DashboardController {
 
             DeityCubeManifest manifest = app.getManifest();
 
+            // Compte Minecraft vérifié avant l'installation : un refus (compte suspendu, CGU à
+            // accepter...) s'affiche sans attendre le téléchargement. Si le compte officiel est
+            // indisponible et que le site l'autorise, le jeu passe en mode hors ligne.
+            AuthenticationResult authentication = null;
+
+            if (!reinstall) {
+
+                updateTitle("Connexion");
+                updateMessage("Connexion à ton compte Minecraft...");
+                updateProgress(-1, 1);
+
+                authentication = app.resolveGameAuthentication();
+
+                AuthenticationResult resolvedAuthentication = authentication;
+                String offlineReason = app.getDeityCompteSession().getOfflineFallbackReason();
+
+                Platform.runLater(() -> showGameIdentity(resolvedAuthentication, offlineReason));
+            }
+
             MinecraftResolvedVersion resolved =
                     reinstall
                             ? pipeline.reinstall(manifest, profile, this)
@@ -474,7 +627,7 @@ public final class DashboardController {
 
             Process process = new MinecraftLauncher().launch(
                     resolved,
-                    app.getAuthentication(),
+                    authentication,
                     ramMb
             );
 

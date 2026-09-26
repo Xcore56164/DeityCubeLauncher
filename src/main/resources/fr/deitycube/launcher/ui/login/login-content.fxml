@@ -4,6 +4,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.image.Image?>
@@ -24,24 +25,18 @@
 
         <VBox styleClass="auth-card" spacing="16" maxWidth="340">
 
-            <HBox styleClass="segmented-toggle" alignment="CENTER">
-                <Button fx:id="offlineTabButton" text="Pseudo" styleClass="segment-button"
-                        maxWidth="Infinity" HBox.hgrow="ALWAYS" onAction="#onSelectOfflineTab"/>
-                <Button fx:id="microsoftTabButton" text="Microsoft" styleClass="segment-button"
-                        maxWidth="Infinity" HBox.hgrow="ALWAYS" onAction="#onSelectMicrosoftTab"/>
-            </HBox>
-
-            <VBox fx:id="offlinePane" spacing="12">
-                <TextField fx:id="usernameField" promptText="Ton pseudo"/>
-                <Button fx:id="offlineLoginButton" text="Se connecter" styleClass="btn-gold"
-                        maxWidth="Infinity" onAction="#onOfflineLogin"/>
-            </VBox>
-
-            <VBox fx:id="microsoftPane" spacing="12" managed="false" visible="false">
-                <Label text="Connecte-toi avec ton compte Microsoft pour jouer avec ton pseudo officiel."
-                       wrapText="true" styleClass="welcome-sub-label"/>
-                <Button fx:id="microsoftLoginButton" text="Se connecter avec Microsoft"
-                        styleClass="btn-gold" maxWidth="Infinity" onAction="#onMicrosoftLogin"/>
+            <VBox spacing="12">
+                <Label text="Connexion avec ton DeityCompte" styleClass="welcome-label"/>
+                <Label text="Ton compte deitycube.fr est ton compte en jeu." wrapText="true"
+                       styleClass="welcome-sub-label"/>
+                <TextField fx:id="emailField" promptText="Email du DeityCompte"/>
+                <PasswordField fx:id="passwordField" promptText="Mot de passe" onAction="#onDeityCompteLogin"/>
+                <Button fx:id="deityCompteLoginButton" text="Se connecter"
+                        styleClass="btn-gold" maxWidth="Infinity" onAction="#onDeityCompteLogin"/>
+                <HBox alignment="CENTER" spacing="6">
+                    <Label text="Créer un compte" styleClass="footer-link" onMouseClicked="#onOpenSignup"/>
+                    <Label text="Mot de passe oublié ?" styleClass="footer-link" onMouseClicked="#onOpenPasswordReset"/>
+                </HBox>
             </VBox>
 
             <CheckBox fx:id="rememberMeCheckbox" text="Se souvenir de moi" selected="true"/>

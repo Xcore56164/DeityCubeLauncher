@@ -1,9 +1,10 @@
 package fr.deitycube.launcher.ui.login;
 
-import fr.deitycube.launcher.auth.AuthenticationMode;
-import fr.deitycube.launcher.auth.MicrosoftLoginFlow;
-import fr.deitycube.launcher.auth.MicrosoftLoginResult;
-import fr.deitycube.launcher.auth.OfflineAuthenticator;
+import fr.deitycube.launcher.config.LauncherConfig;
+import fr.deitycube.launcher.deitycompte.DeityCompteAccount;
+import fr.deitycube.launcher.deitycompte.DeityCompteApi;
+import fr.deitycube.launcher.deitycompte.DeityCompteException;
+import fr.deitycube.launcher.deitycompte.DeityCompteSession;
 import fr.deitycube.launcher.settings.LauncherSettings;
 import fr.deitycube.launcher.ui.LauncherApp;
 import javafx.animation.Interpolator;
@@ -13,12 +14,14 @@ import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 public final class LoginController {
@@ -27,28 +30,16 @@ public final class LoginController {
     private ImageView titleLogoView;
 
     @FXML
-    private Button offlineTabButton;
+    private TextField emailField;
 
     @FXML
-    private Button microsoftTabButton;
-
-    @FXML
-    private VBox offlinePane;
-
-    @FXML
-    private VBox microsoftPane;
-
-    @FXML
-    private TextField usernameField;
+    private PasswordField passwordField;
 
     @FXML
     private CheckBox rememberMeCheckbox;
 
     @FXML
-    private Button offlineLoginButton;
-
-    @FXML
-    private Button microsoftLoginButton;
+    private Button deityCompteLoginButton;
 
     @FXML
     private Label statusLabel;
@@ -66,19 +57,13 @@ public final class LoginController {
 
         LauncherSettings settings = app.getSettings();
 
-        usernameField.setText(settings.getOfflineUsername());
+        emailField.setText(settings.getDeityCompteEmail());
         rememberMeCheckbox.setSelected(settings.isRememberMe());
 
-        boolean microsoftMode = "MICROSOFT".equals(settings.getAuthMode());
+        String savedSession = settings.getDeityCompteSession();
 
-        selectTab(microsoftMode);
-
-        if (settings.isRememberMe()
-                && microsoftMode
-                && settings.getMicrosoftRefreshToken() != null
-                && !settings.getMicrosoftRefreshToken().isBlank()) {
-
-            attemptSilentMicrosoftLogin(settings.getMicrosoftRefreshToken());
+        if (savedSession != null && !savedSession.isBlank()) {
+            attemptSilentDeityCompteLogin(savedSession);
         }
     }
 
@@ -92,72 +77,35 @@ public final class LoginController {
         floatUp.play();
     }
 
-    @FXML
-    private void onSelectOfflineTab() {
-        selectTab(false);
-    }
 
     @FXML
-    private void onSelectMicrosoftTab() {
-        selectTab(true);
-    }
+    private void onDeityCompteLogin() {
 
-    private void selectTab(boolean microsoft) {
+        String email = emailField.getText() == null ? "" : emailField.getText().trim();
+        String password = passwordField.getText() == null ? "" : passwordField.getText();
 
-        offlineTabButton.getStyleClass().removeAll("selected-segment");
-        microsoftTabButton.getStyleClass().removeAll("selected-segment");
-
-        if (microsoft) {
-            microsoftTabButton.getStyleClass().add("selected-segment");
-        } else {
-            offlineTabButton.getStyleClass().add("selected-segment");
+        if (email.isEmpty() || password.isEmpty()) {
+            showError("Indique l'email et le mot de passe de ton DeityCompte.", null);
+            return;
         }
 
-        offlinePane.setVisible(!microsoft);
-        offlinePane.setManaged(!microsoft);
-        microsoftPane.setVisible(microsoft);
-        microsoftPane.setManaged(microsoft);
-    }
+        setLoading(true, "Connexion à ton DeityCompte...");
 
-    @FXML
-    private void onOfflineLogin() {
-
-        String username = usernameField.getText();
-
-        try {
-
-            var authentication = OfflineAuthenticator.authenticate(username);
-
-            persistOfflineSession(username);
-
-            app.setAuthentication(authentication);
-            app.showDashboard();
-
-        } catch (IllegalArgumentException e) {
-
-            showError(e.getMessage());
-        }
-    }
-
-    @FXML
-    private void onMicrosoftLogin() {
-
-        setLoading(true, "Connexion à Microsoft...");
-
-        Task<MicrosoftLoginResult> task = new Task<>() {
+        Task<DeityCompteSession> task = new Task<>() {
             @Override
-            protected MicrosoftLoginResult call() throws Exception {
-                return MicrosoftLoginFlow.login();
+            protected DeityCompteSession call() throws Exception {
+                return DeityCompteApi.login(email, password);
             }
         };
 
         task.setOnSucceeded(event -> {
 
-            MicrosoftLoginResult result = task.getValue();
+            DeityCompteSession session = task.getValue();
 
-            persistMicrosoftSession(result.getRefreshToken());
+            passwordField.clear();
+            persistDeityCompteSession(email, session.getSessionToken());
 
-            app.setAuthentication(result.getAuthentication());
+            app.setDeityCompteSession(session);
 
             setLoading(false, "");
 
@@ -167,43 +115,65 @@ public final class LoginController {
         task.setOnFailed(event -> {
 
             setLoading(false, "");
+            passwordField.clear();
 
-            showError(
-                    "Connexion Microsoft impossible : "
-                            + task.getException().getMessage()
-            );
+            showFailure(task.getException());
         });
 
-        runInBackground(task, "microsoft-login");
+        runInBackground(task, "deitycompte-login");
     }
 
-    private void attemptSilentMicrosoftLogin(String refreshToken) {
+    /** Session mémorisée : vérifiée auprès du site (compte suspendu, CGU à accepter...). */
+    private void attemptSilentDeityCompteLogin(String sessionToken) {
 
         setLoading(true, "Reconnexion automatique...");
 
-        Task<MicrosoftLoginResult> task = new Task<>() {
+        Task<DeityCompteAccount> task = new Task<>() {
             @Override
-            protected MicrosoftLoginResult call() throws Exception {
-                return MicrosoftLoginFlow.loginWithRefreshToken(refreshToken);
+            protected DeityCompteAccount call() throws Exception {
+                return DeityCompteApi.fetchAccount(sessionToken);
             }
         };
 
         task.setOnSucceeded(event -> {
 
-            MicrosoftLoginResult result = task.getValue();
-
-            persistMicrosoftSession(result.getRefreshToken());
-
-            app.setAuthentication(result.getAuthentication());
+            app.setDeityCompteSession(
+                    new DeityCompteSession(sessionToken, task.getValue())
+            );
 
             setLoading(false, "");
 
             app.showDashboard();
         });
 
-        task.setOnFailed(event -> setLoading(false, ""));
+        task.setOnFailed(event -> {
 
-        runInBackground(task, "microsoft-silent-login");
+            Throwable error = task.getException();
+
+            if (error instanceof DeityCompteException accountError && accountError.isSessionInvalid()) {
+
+                app.forgetDeityCompteSession(false);
+                setLoading(false, accountError.getMessage());
+                return;
+            }
+
+            // Site injoignable, compte à régulariser sur le site... : la session reste
+            // mémorisée, le joueur pourra réessayer.
+            setLoading(false, "");
+            showFailure(error);
+        });
+
+        runInBackground(task, "deitycompte-silent-login");
+    }
+
+    @FXML
+    private void onOpenSignup() {
+        app.openUrl(LauncherConfig.SIGNUP_URL);
+    }
+
+    @FXML
+    private void onOpenPasswordReset() {
+        app.openUrl(LauncherConfig.PASSWORD_RESET_URL);
     }
 
     private void runInBackground(Task<?> task, String name) {
@@ -212,30 +182,18 @@ public final class LoginController {
         thread.start();
     }
 
-    private void persistOfflineSession(String username) {
+
+    private void persistDeityCompteSession(String email, String sessionToken) {
 
         LauncherSettings settings = app.getSettings();
 
-        settings.setAuthMode(AuthenticationMode.OFFLINE.name());
         settings.setRememberMe(rememberMeCheckbox.isSelected());
-        settings.setMicrosoftRefreshToken(null);
+        settings.setDeityCompteEmail(email);
 
-        settings.setOfflineUsername(
-                rememberMeCheckbox.isSelected() ? username.trim() : ""
-        );
-
-        app.saveSettings();
-    }
-
-    private void persistMicrosoftSession(String refreshToken) {
-
-        LauncherSettings settings = app.getSettings();
-
-        settings.setAuthMode(AuthenticationMode.MICROSOFT.name());
-        settings.setRememberMe(rememberMeCheckbox.isSelected());
-
-        settings.setMicrosoftRefreshToken(
-                rememberMeCheckbox.isSelected() ? refreshToken : null
+        // Sans "Se souvenir de moi", le jeton reste en mémoire et la session est fermée sur le
+        // site à la fermeture du launcher.
+        settings.setDeityCompteSession(
+                rememberMeCheckbox.isSelected() ? sessionToken : null
         );
 
         app.saveSettings();
@@ -246,15 +204,29 @@ public final class LoginController {
         Platform.runLater(() -> {
             loadingIndicator.setVisible(loading);
             loadingIndicator.setManaged(loading);
-            offlineLoginButton.setDisable(loading);
-            microsoftLoginButton.setDisable(loading);
-            offlineTabButton.setDisable(loading);
-            microsoftTabButton.setDisable(loading);
+            deityCompteLoginButton.setDisable(loading);
+            emailField.setDisable(loading);
+            passwordField.setDisable(loading);
             statusLabel.setText(message);
         });
     }
 
-    private void showError(String message) {
+    private void showFailure(Throwable error) {
+
+        if (error instanceof DeityCompteException accountError) {
+            showError(accountError.getMessage(), accountError.getUrl());
+            return;
+        }
+
+        showError(
+                "Connexion impossible : "
+                        + (error != null ? error.getMessage() : "erreur inconnue."),
+                null
+        );
+    }
+
+    /** url : page du site où régler le problème (bouton « Ouvrir deitycube.fr »), ou null. */
+    private void showError(String message, String url) {
 
         Platform.runLater(() -> {
 
@@ -262,7 +234,16 @@ public final class LoginController {
             alert.setTitle("Connexion impossible");
             alert.setHeaderText(null);
             alert.setContentText(message);
-            alert.showAndWait();
+
+            ButtonType openSite = new ButtonType("Ouvrir deitycube.fr", ButtonBar.ButtonData.OTHER);
+
+            if (url != null) {
+                alert.getButtonTypes().add(openSite);
+            }
+
+            alert.showAndWait()
+                    .filter(button -> button == openSite)
+                    .ifPresent(button -> app.openUrl(url));
         });
     }
 }

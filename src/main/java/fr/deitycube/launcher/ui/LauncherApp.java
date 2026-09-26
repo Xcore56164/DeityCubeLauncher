@@ -2,6 +2,9 @@ package fr.deitycube.launcher.ui;
 
 import fr.deitycube.launcher.auth.AuthenticationResult;
 import fr.deitycube.launcher.config.AppVersion;
+import fr.deitycube.launcher.config.LauncherConfig;
+import fr.deitycube.launcher.deitycompte.DeityCompteApi;
+import fr.deitycube.launcher.deitycompte.DeityCompteSession;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.logging.LauncherLogger;
 import fr.deitycube.launcher.minecraft.platform.OperatingSystem;
@@ -50,7 +53,6 @@ import java.util.Objects;
 public final class LauncherApp extends Application {
 
     private static final String ASSETS_PATH = "assets/";
-    private static final String WEBSITE_URL = "https://deitycube.fr";
 
     private Stage stage;
     private StackPane contentArea;
@@ -58,7 +60,9 @@ public final class LauncherApp extends Application {
 
     private LauncherSettings settings;
     private DeityCubeManifest manifest;
-    private AuthenticationResult authentication;
+
+    // DeityCompte connecté (le compte Minecraft, officiel ou hors ligne, est résolu au lancement).
+    private DeityCompteSession deityCompteSession;
 
     public static void main(String[] args) {
         launch(args);
@@ -231,11 +235,16 @@ public final class LauncherApp extends Application {
     }
 
     private void openWebsite() {
+        openUrl(LauncherConfig.WEBSITE_URL);
+    }
+
+    /** Ouvre une page (du site DeityCube) dans le navigateur du joueur. */
+    public void openUrl(String url) {
 
         Thread thread = new Thread(() -> {
             try {
                 if (Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().browse(URI.create(WEBSITE_URL));
+                    Desktop.getDesktop().browse(URI.create(url));
                 }
             } catch (Exception e) {
                 System.err.println(
@@ -375,12 +384,87 @@ public final class LauncherApp extends Application {
         thread.start();
     }
 
-    public AuthenticationResult getAuthentication() {
-        return authentication;
+    public DeityCompteSession getDeityCompteSession() {
+        return deityCompteSession;
     }
 
-    public void setAuthentication(AuthenticationResult authentication) {
-        this.authentication = authentication;
+    public void setDeityCompteSession(DeityCompteSession deityCompteSession) {
+        this.deityCompteSession = deityCompteSession;
+    }
+
+    /**
+     * Profil et jeton avec lesquels lancer le jeu. Peut contacter deitycube.fr, Xbox Live et
+     * Minecraft Services : à appeler hors du thread JavaFX.
+     */
+    public AuthenticationResult resolveGameAuthentication() throws Exception {
+        return deityCompteSession.resolveGameAuthentication();
+    }
+
+    /** Déconnexion volontaire : la session est aussi fermée côté site. */
+    public void logout() {
+        forgetDeityCompteSession(true);
+        showLogin();
+    }
+
+    /** Session DeityCompte expirée ou révoquée depuis le site : retour à l'écran de connexion. */
+    public void onDeityCompteSessionExpired() {
+        forgetDeityCompteSession(false);
+        showLogin();
+    }
+
+    /**
+     * Oublie la session DeityCompte (en mémoire et dans les réglages).
+     * closeOnServer : la fermer aussi sur le site (elle disparaît des appareils du compte).
+     */
+    public void forgetDeityCompteSession(boolean closeOnServer) {
+
+        DeityCompteSession session = deityCompteSession;
+        deityCompteSession = null;
+
+        String savedToken = settings.getDeityCompteSession();
+
+        if (savedToken != null) {
+            settings.setDeityCompteSession(null);
+            saveSettings();
+        }
+
+        String token = session != null ? session.getSessionToken() : savedToken;
+
+        if (closeOnServer && token != null) {
+            closeSessionOnServer(token, false);
+        }
+    }
+
+    private void closeSessionOnServer(String sessionToken, boolean wait) {
+
+        Runnable logout = () -> {
+            try {
+                DeityCompteApi.logout(sessionToken, java.time.Duration.ofSeconds(wait ? 3 : 15));
+            } catch (Exception e) {
+                System.err.println(
+                        "Déconnexion DeityCompte côté site impossible : " + e.getMessage()
+                );
+            }
+        };
+
+        if (wait) {
+            logout.run();
+            return;
+        }
+
+        Thread thread = new Thread(logout, "deitycompte-logout");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    @Override
+    public void stop() {
+
+        // Session non mémorisée ("Se souvenir de moi" décoché) : son jeton disparaît avec le
+        // launcher, on la ferme donc aussi sur le site.
+        if (deityCompteSession != null && settings.getDeityCompteSession() == null) {
+            closeSessionOnServer(deityCompteSession.getSessionToken(), true);
+        }
     }
 
     private void checkForLauncherUpdate() {

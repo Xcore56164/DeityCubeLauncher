@@ -4,19 +4,31 @@
 
 # DeityCube Launcher
 
-Official launcher for the **DeityCube** Minecraft server. It handles sign-in (Microsoft
-account or offline), automatically downloads and installs Minecraft, NeoForge and the modpack,
-then launches the game — no manual file handling required.
+Official launcher for the **DeityCube** Minecraft server. Players sign in with their
+**DeityCompte** (their deitycube.fr account, which is also their in-game account); the launcher
+shows their DeityCompte profile, automatically downloads and installs Minecraft, NeoForge and
+the modpack, then launches the game — no manual file handling required.
 
-> **Note on offline sign-in**: offline authentication is a **temporary** measure only,
+> **Note on offline mode**: when the official Minecraft account cannot be used, the game can
+> fall back to offline mode under the DeityCompte's game name. This is a **temporary** measure,
 > tolerated while DeityCube awaits authorization from Minecraft Services to use their
-> authentication API. It is not a permanent feature: it will be removed once that
-> authorization is obtained, at which point Microsoft sign-in will become mandatory.
+> authentication API, and it is controlled by the website (`LAUNCHER_MODE_HORS_LIGNE`): once
+> that authorization is obtained, it will be disabled and the official account required.
 
 ## Features
 
-- **Microsoft** sign-in (OAuth/PKCE flow + Xbox Live/XSTS), or a **temporary offline** profile
-  (see note above — pending Minecraft Services API authorization).
+- **DeityCompte** sign-in: the player signs in with their deitycube.fr account (email +
+  password, exchanged once for a revocable session token). The Microsoft account is linked on
+  the website when the DeityCompte is created; its refresh token stays on the server. At each
+  game launch the website provides a short-lived Microsoft access token, and the launcher runs
+  Xbox Live → XSTS → Minecraft Services itself, from the player's own IP address.
+- DeityCompte **profile** on the dashboard (photo, pseudo, role, linked Microsoft account,
+  in-game identity).
+- **Offline fallback** (see note above): if the official account fails (Microsoft, Xbox Live or
+  Minecraft Services) and the website allows it, the game starts offline under the game name
+  assigned by the website. Account problems (expired session, sanction, terms to accept) still
+  block the launch.
+- Local testing against the website in development: `-Ddeitycube.api=http://localhost:8000/api/launcher/`.
 - Automatic install and repair of Minecraft, NeoForge and the DeityCube modpack (every
   downloaded file is verified against a SHA-1/SHA-256 checksum).
 - Multiple modpack profiles to choose from (server-defined via the DeityCube manifest).
