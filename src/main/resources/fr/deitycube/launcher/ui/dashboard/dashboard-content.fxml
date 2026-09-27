@@ -46,7 +46,7 @@
         </top>
 
         <left>
-            <VBox styleClass="auth-card, profile-card" spacing="16" prefWidth="290" maxWidth="290"
+            <VBox styleClass="auth-card, profile-card" cache="true" spacing="16" prefWidth="290" maxWidth="290"
                   maxHeight="-Infinity" BorderPane.alignment="TOP_LEFT">
                 <BorderPane.margin>
                     <Insets top="26" left="26"/>
@@ -92,7 +92,7 @@
                     <VBox fx:id="idleBox" alignment="CENTER" spacing="14">
                         <HBox fx:id="profileToggle" styleClass="segmented-toggle"
                               alignment="CENTER" prefWidth="240" maxWidth="240"/>
-                        <Button fx:id="playButton" text="JOUER" styleClass="btn-gold"
+                        <Button fx:id="playButton" text="JOUER" styleClass="btn-gold" cache="true"
                                 onAction="#onPlay"/>
                     </VBox>
 
@@ -113,7 +113,7 @@
     <StackPane fx:id="settingsOverlay" styleClass="modal-scrim" visible="false"
                managed="false" onMouseClicked="#onScrimClicked">
 
-        <VBox fx:id="modalCard" styleClass="modal-card" maxWidth="440" maxHeight="560"
+        <VBox fx:id="modalCard" styleClass="modal-card" cache="true" maxWidth="440" maxHeight="560"
               onMouseClicked="#onCardClicked">
             <padding>
                 <Insets top="24" right="8" bottom="24" left="26"/>

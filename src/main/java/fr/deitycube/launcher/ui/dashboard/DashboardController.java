@@ -631,14 +631,26 @@ public final class DashboardController {
                     ramMb
             );
 
-            if (!keepOpen) {
-                Platform.runLater(() -> app.getStage().hide());
-            }
+            Platform.runLater(() -> {
+                app.setGameRunning(true);
 
-            int exitCode = process.waitFor();
+                if (!keepOpen) {
+                    app.getStage().hide();
+                }
+            });
 
-            if (!keepOpen) {
-                Platform.runLater(() -> app.getStage().show());
+            int exitCode;
+
+            try {
+                exitCode = process.waitFor();
+            } finally {
+                Platform.runLater(() -> {
+                    app.setGameRunning(false);
+
+                    if (!keepOpen) {
+                        app.getStage().show();
+                    }
+                });
             }
 
             if (exitCode != 0) {

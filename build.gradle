@@ -31,8 +31,14 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// JVM du launcher uniquement (Minecraft et les processeurs NeoForge ont leurs propres options).
+// Sans limite, la JVM s'autorise 1/4 de la RAM du PC alors que le launcher n'a besoin que de
+// quelques centaines de Mo, et il peut rester ouvert pendant toute la partie.
+def launcherJvmOptions = ['-Xms32m', '-Xmx384m', '-XX:+UseSerialGC']
+
 application {
     mainClass = 'fr.deitycube.launcher.Main'
+    applicationDefaultJvmArgs = launcherJvmOptions
 }
 
 javafx {
@@ -94,11 +100,30 @@ tasks.register('createInstaller') {
         def runtimeImagePath = runtimeImageDir.get().asFile
         delete(runtimeImagePath)
 
+        // Ce runtime lance aussi Minecraft, NeoForge et les mods : on garde tout le JDK sauf les
+        // outils de développement, dont aucun jeu n'a besoin (jlink rajoute de lui-même un module
+        // exclu si un module conservé en dépend).
+        def excludedModules = [
+                'jdk.compiler', 'jdk.editpad', 'jdk.hotspot.agent', 'jdk.internal.ed',
+                'jdk.internal.le', 'jdk.internal.opt', 'jdk.internal.vm.ci',
+                'jdk.internal.vm.compiler', 'jdk.internal.vm.compiler.management',
+                'jdk.jartool', 'jdk.javadoc', 'jdk.jcmd', 'jdk.jconsole', 'jdk.jdeps', 'jdk.jdi',
+                'jdk.jdwp.agent', 'jdk.jlink', 'jdk.jpackage', 'jdk.jshell', 'jdk.jstatd'
+        ] as Set
+
+        def runtimeModules = file(jmodsDir).listFiles()
+                .collect { it.name }
+                .findAll { it.endsWith('.jmod') }
+                .collect { it - '.jmod' }
+                .findAll { !excludedModules.contains(it) }
+                .sort()
+
         exec {
             commandLine(
                     jlinkBin,
                     '--module-path', jmodsDir,
-                    '--add-modules', 'ALL-MODULE-PATH',
+                    '--add-modules', runtimeModules.join(','),
+                    '--strip-debug',
                     '--no-header-files',
                     '--no-man-pages',
                     '--output', runtimeImagePath.absolutePath
@@ -119,7 +144,7 @@ tasks.register('createInstaller') {
                 '--description', 'Official launcher for the DeityCube modpack',
                 '--copyright', "Copyright (c) ${new Date().format('yyyy')} DeityCube",
                 '--license-file', file('LICENSE').absolutePath
-        ]
+        ] + launcherJvmOptions.collectMany { ['--java-options', it] }
 
         if (currentOs.isWindows()) {
 
@@ -149,6 +174,12 @@ tasks.register('createInstaller') {
 
                 if (type == 'deb') {
                     args += ['--linux-deb-maintainer', linuxMaintainer]
+                    // Nécessaires à la lecture H.264/AAC par javafx-media (GStreamer système).
+                    // Disponibles dans les dépôts activés par défaut sur Debian/Ubuntu (contrairement
+                    // aux paquets RPM équivalents sur Fedora, qui exigent RPM Fusion : voir
+                    // LinuxCodecAdvisor pour la mitigation appliquée côté RPM).
+                    args += ['--linux-package-deps',
+                             'gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav']
                 }
 
                 if (linuxIconFile.exists()) {

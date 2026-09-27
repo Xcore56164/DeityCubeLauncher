@@ -16,6 +16,7 @@ import fr.deitycube.launcher.ui.login.LoginController;
 import fr.deitycube.launcher.update.LauncherUpdateManifest;
 import fr.deitycube.launcher.update.LauncherUpdater;
 import javafx.animation.FadeTransition;
+import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -30,7 +31,10 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
@@ -53,10 +57,14 @@ import java.util.Objects;
 public final class LauncherApp extends Application {
 
     private static final String ASSETS_PATH = "assets/";
+    private static final int BACKGROUND_VIDEO_ATTEMPTS = 5;
 
     private Stage stage;
     private StackPane contentArea;
     private Label deityCubeVersionLabel;
+
+    private MediaPlayer backgroundPlayer;
+    private boolean gameRunning;
 
     private LauncherSettings settings;
     private DeityCubeManifest manifest;
@@ -95,6 +103,11 @@ public final class LauncherApp extends Application {
         primaryStage.setScene(scene);
 
         loadWindowIcon(primaryStage);
+
+        // Le fond vidéo n'est décodé que lorsqu'il est visible : pas pendant que la fenêtre est
+        // réduite ou cachée, ni pendant une partie (il prendrait du CPU/GPU au jeu).
+        primaryStage.showingProperty().addListener((obs, oldValue, newValue) -> updateBackgroundPlayback());
+        primaryStage.iconifiedProperty().addListener((obs, oldValue, newValue) -> updateBackgroundPlayback());
 
         showLogin();
         loadManifest();
@@ -144,69 +157,178 @@ public final class LauncherApp extends Application {
             return null;
         }
 
+        String videoSource = videoUrl.toExternalForm();
+
+        System.out.println("Fond vidéo : chargement depuis " + videoSource);
+
+        MediaView view = new MediaView();
+        view.setPreserveRatio(false);
+        view.setMouseTransparent(true);
+
+        loadBackgroundPlayer(view, container, videoSource, 1);
+
+        return view;
+    }
+
+    /**
+     * Sous Windows, le décodeur H.264 (DirectShow) utilisé par JavaFX échoue par intermittence à
+     * l'ouverture (« Failed to decode stream » puis ERROR_MEDIA_INVALID) : on recrée alors le
+     * lecteur, quelques fois, avant d'abandonner le fond vidéo.
+     */
+    private void loadBackgroundPlayer(MediaView view, StackPane container, String videoSource, int attempt) {
+
+        Media media;
+        MediaPlayer player;
+
         try {
-
-            System.out.println("Fond vidéo : chargement depuis " + videoUrl);
-
-            Media media = new Media(videoUrl.toExternalForm());
-            MediaPlayer player = new MediaPlayer(media);
-
-            player.setMute(true);
-            player.setCycleCount(MediaPlayer.INDEFINITE);
-            player.setAutoPlay(true);
-
-            player.setOnError(() ->
-                    System.err.println(
-                            "Fond vidéo : erreur de lecture - " + player.getError()
-                    )
-            );
-
-            media.setOnError(() ->
-                    System.err.println(
-                            "Fond vidéo : erreur média - " + media.getError()
-                    )
-            );
-
-            MediaView view = new MediaView(player);
-            view.setPreserveRatio(false);
-            view.setMouseTransparent(true);
-
-            player.setOnReady(() -> {
-
-                double videoWidth = media.getWidth();
-                double videoHeight = media.getHeight();
-
-                System.out.println(
-                        "Fond vidéo : prêt (" + videoWidth + "x" + videoHeight + ")"
-                );
-
-                if (videoWidth <= 0 || videoHeight <= 0) {
-                    return;
-                }
-
-                DoubleBinding scale = Bindings.createDoubleBinding(
-                        () -> Math.max(
-                                container.getWidth() / videoWidth,
-                                container.getHeight() / videoHeight
-                        ),
-                        container.widthProperty(),
-                        container.heightProperty()
-                );
-
-                view.fitWidthProperty().bind(scale.multiply(videoWidth));
-                view.fitHeightProperty().bind(scale.multiply(videoHeight));
-            });
-
-            return view;
-
+            media = new Media(videoSource);
+            player = new MediaPlayer(media);
         } catch (Exception e) {
+            System.err.println("Fond vidéo indisponible : " + e.getMessage());
+            maybeShowLinuxCodecHelp();
+            return;
+        }
+
+        player.setMute(true);
+        player.setCycleCount(MediaPlayer.INDEFINITE);
+
+        backgroundPlayer = player;
+        view.setMediaPlayer(player);
+
+        boolean[] failed = {false};
+
+        Runnable onError = () -> {
+
+            if (failed[0]) {
+                return;
+            }
+
+            failed[0] = true;
 
             System.err.println(
-                    "Fond vidéo indisponible : " + e.getMessage()
+                    "Fond vidéo : erreur de lecture (tentative " + attempt + "/" + BACKGROUND_VIDEO_ATTEMPTS + ") - "
+                            + (player.getError() != null ? player.getError() : media.getError())
             );
 
-            return null;
+            player.dispose();
+
+            if (attempt < BACKGROUND_VIDEO_ATTEMPTS) {
+                PauseTransition retryDelay = new PauseTransition(Duration.millis(300));
+                retryDelay.setOnFinished(event -> loadBackgroundPlayer(view, container, videoSource, attempt + 1));
+                retryDelay.play();
+            } else {
+                backgroundPlayer = null;
+                maybeShowLinuxCodecHelp();
+            }
+        };
+
+        player.setOnError(onError);
+        media.setOnError(onError);
+
+        player.setOnReady(() -> {
+
+            double videoWidth = media.getWidth();
+            double videoHeight = media.getHeight();
+
+            System.out.println(
+                    "Fond vidéo : prêt (" + videoWidth + "x" + videoHeight + ", tentative " + attempt + ")"
+            );
+
+            updateBackgroundPlayback();
+
+            if (videoWidth <= 0 || videoHeight <= 0) {
+                return;
+            }
+
+            DoubleBinding scale = Bindings.createDoubleBinding(
+                    () -> Math.max(
+                            container.getWidth() / videoWidth,
+                            container.getHeight() / videoHeight
+                    ),
+                    container.widthProperty(),
+                    container.heightProperty()
+            );
+
+            view.fitWidthProperty().bind(scale.multiply(videoWidth));
+            view.fitHeightProperty().bind(scale.multiply(videoHeight));
+        });
+    }
+
+    /** Signale qu'une partie est en cours : le fond vidéo est mis en pause pendant ce temps. */
+    public void setGameRunning(boolean gameRunning) {
+        this.gameRunning = gameRunning;
+        updateBackgroundPlayback();
+    }
+
+    private void updateBackgroundPlayback() {
+
+        // Tant que le lecteur n'est pas prêt (ou s'il a échoué), on n'y touche pas :
+        // setOnReady rappelle cette méthode une fois le lecteur prêt.
+        if (backgroundPlayer == null) {
+            return;
         }
+
+        MediaPlayer.Status status = backgroundPlayer.getStatus();
+
+        if (status == MediaPlayer.Status.UNKNOWN
+                || status == MediaPlayer.Status.HALTED
+                || status == MediaPlayer.Status.DISPOSED) {
+            return;
+        }
+
+        if (stage.isShowing() && !stage.isIconified() && !gameRunning) {
+            backgroundPlayer.play();
+        } else {
+            backgroundPlayer.pause();
+        }
+    }
+
+    private boolean linuxCodecHintShown;
+
+    private void maybeShowLinuxCodecHelp() {
+
+        if (OperatingSystem.current() != OperatingSystem.LINUX || linuxCodecHintShown) {
+            return;
+        }
+
+        linuxCodecHintShown = true;
+
+        Platform.runLater(() -> {
+
+            String command = LinuxCodecAdvisor.suggestedInstallCommand();
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Lecture vidéo indisponible");
+            alert.setHeaderText(
+                    "Le fond animé nécessite des codecs GStreamer absents de ce système"
+            );
+            alert.setContentText(
+                    "Le launcher fonctionne normalement, mais l'arrière-plan vidéo ne peut pas "
+                            + "être décodé sur cette machine. Exécute la commande ci-dessous dans "
+                            + "un terminal puis relance le launcher :"
+            );
+
+            TextArea commandArea = new TextArea(command);
+            commandArea.setEditable(false);
+            commandArea.setWrapText(true);
+            commandArea.setPrefRowCount(3);
+
+            ButtonType copyButton = new ButtonType("Copier la commande");
+            alert.getButtonTypes().add(copyButton);
+            alert.getDialogPane().setExpandableContent(commandArea);
+            alert.getDialogPane().setExpanded(true);
+
+            alert.showAndWait().ifPresent(button -> {
+
+                if (button == copyButton) {
+
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(command);
+
+                    Clipboard.getSystemClipboard().setContent(content);
+                }
+            });
+        });
     }
 
     private Region buildFooter() {

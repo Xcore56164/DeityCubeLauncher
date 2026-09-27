@@ -23,7 +23,7 @@
             <Image url="@../assets/logo-title.png" backgroundLoading="true"/>
         </ImageView>
 
-        <VBox styleClass="auth-card" spacing="16" maxWidth="340">
+        <VBox styleClass="auth-card" spacing="16" maxWidth="340" cache="true">
 
             <VBox spacing="12">
                 <Label text="Connexion avec ton DeityCompte" styleClass="welcome-label"/>
