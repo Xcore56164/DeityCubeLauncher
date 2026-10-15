@@ -13,8 +13,6 @@ import fr.deitycube.launcher.settings.LauncherSettings;
 import fr.deitycube.launcher.settings.LauncherSettingsStore;
 import fr.deitycube.launcher.ui.dashboard.DashboardController;
 import fr.deitycube.launcher.ui.login.LoginController;
-import fr.deitycube.launcher.update.LauncherUpdateManifest;
-import fr.deitycube.launcher.update.LauncherUpdater;
 import javafx.animation.FadeTransition;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
@@ -23,14 +21,12 @@ import javafx.beans.binding.Bindings;
 import javafx.beans.binding.DoubleBinding;
 import javafx.concurrent.Task;
 import javafx.fxml.FXMLLoader;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
 import javafx.scene.input.Clipboard;
@@ -38,14 +34,11 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.media.MediaView;
 import javafx.scene.shape.Rectangle;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.stage.StageStyle;
 import javafx.util.Duration;
 
 import java.awt.Desktop;
@@ -111,7 +104,6 @@ public final class LauncherApp extends Application {
 
         showLogin();
         loadManifest();
-        checkForLauncherUpdate();
 
         primaryStage.show();
     }
@@ -587,156 +579,5 @@ public final class LauncherApp extends Application {
         if (deityCompteSession != null && settings.getDeityCompteSession() == null) {
             closeSessionOnServer(deityCompteSession.getSessionToken(), true);
         }
-    }
-
-    private void checkForLauncherUpdate() {
-
-        Task<LauncherUpdateManifest> task = new Task<>() {
-            @Override
-            protected LauncherUpdateManifest call() throws Exception {
-                return new LauncherUpdater().checkForUpdate();
-            }
-        };
-
-        task.setOnSucceeded(event -> {
-
-            LauncherUpdateManifest update = task.getValue();
-
-            if (update != null) {
-                promptLauncherUpdate(update);
-            }
-        });
-
-        task.setOnFailed(event ->
-                System.err.println(
-                        "Vérification de mise à jour du launcher impossible : "
-                                + task.getException()
-                )
-        );
-
-        Thread thread = new Thread(task, "update-check");
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    private void promptLauncherUpdate(LauncherUpdateManifest update) {
-
-        boolean windows = OperatingSystem.current() == OperatingSystem.WINDOWS;
-
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Mise à jour disponible");
-        alert.setHeaderText("DeityCube Launcher " + update.getVersion() + " est disponible");
-        alert.setContentText(
-                (update.getNotes() != null && !update.getNotes().isBlank()
-                        ? update.getNotes() + "\n\n"
-                        : "")
-                        + "Voulez-vous l'installer maintenant ? "
-                        + (windows
-                                ? "L'installeur se lancera puis le launcher se fermera ; relancez-le une fois la mise à jour terminée."
-                                : "Le gestionnaire de paquets de votre système s'ouvrira pour terminer l'installation.")
-        );
-
-        alert.showAndWait()
-                .filter(button -> button == ButtonType.OK)
-                .ifPresent(button -> runLauncherUpdate(update));
-    }
-
-    private void runLauncherUpdate(LauncherUpdateManifest update) {
-
-        Task<Void> task = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-
-                new LauncherUpdater().downloadAndApply(update, (phase, detail, current, total) -> {
-                    updateTitle(phase);
-                    updateMessage(detail);
-                    updateProgress(-1, 1);
-                });
-
-                return null;
-            }
-        };
-
-        Stage progressDialog = showUpdateProgressDialog(task);
-
-        // downloadAndApply() ne fait que démarrer l'installation puis revient immédiatement,
-        // sur les deux OS : on n'attend jamais la fin de l'installeur dans ce process (voir le
-        // commentaire de LauncherUpdater.downloadAndApply pour la raison — un antivirus qui tue
-        // l'installeur pendant qu'on attend dessus peut laisser le launcher désinstallé sans que
-        // la nouvelle version ait pu s'installer). C'est donc toujours à l'utilisateur de
-        // relancer le launcher une fois l'installation terminée de son côté.
-        task.setOnSucceeded(event -> {
-
-            progressDialog.close();
-
-            boolean windows = OperatingSystem.current() == OperatingSystem.WINDOWS;
-
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Mise à jour");
-            alert.setHeaderText("Terminez l'installation");
-            alert.setContentText(
-                    windows
-                            ? "L'installeur a démarré indépendamment du launcher, qui va maintenant se "
-                                    + "fermer. Relancez DeityCube Launcher une fois la mise à jour terminée."
-                            : "Le paquet a été téléchargé et ouvert avec votre gestionnaire de paquets. "
-                                    + "Terminez l'installation puis relancez DeityCube Launcher."
-            );
-            alert.showAndWait();
-
-            if (windows) {
-                Platform.exit();
-            }
-        });
-
-        task.setOnFailed(event -> {
-            progressDialog.close();
-            showUpdateErrorDialog(task.getException());
-        });
-
-        Thread thread = new Thread(task, "launcher-update");
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    private Stage showUpdateProgressDialog(Task<Void> task) {
-
-        Label titleLabel = new Label("Mise à jour du launcher...");
-        titleLabel.getStyleClass().add("welcome-label");
-
-        ProgressBar progressBar = new ProgressBar();
-        progressBar.progressProperty().bind(task.progressProperty());
-        progressBar.setPrefWidth(320);
-
-        Label statusLabel = new Label();
-        statusLabel.textProperty().bind(task.messageProperty());
-
-        VBox content = new VBox(14, titleLabel, progressBar, statusLabel);
-        content.setAlignment(Pos.CENTER);
-        content.setPadding(new Insets(28));
-        content.getStyleClass().add("modal-card");
-
-        Stage dialog = new Stage(StageStyle.UNDECORATED);
-        dialog.initOwner(stage);
-        dialog.initModality(Modality.APPLICATION_MODAL);
-
-        Scene scene = new Scene(content, 380, 170);
-        scene.getStylesheets().add(
-                Objects.requireNonNull(getClass().getResource("app.css")).toExternalForm()
-        );
-
-        dialog.setScene(scene);
-        dialog.setResizable(false);
-        dialog.show();
-
-        return dialog;
-    }
-
-    private void showUpdateErrorDialog(Throwable error) {
-
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Erreur");
-        alert.setHeaderText("La mise à jour du launcher a échoué");
-        alert.setContentText(error != null ? error.getMessage() : "Erreur inconnue.");
-        alert.showAndWait();
     }
 }

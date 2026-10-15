@@ -46,9 +46,20 @@ javafx {
     modules = ['javafx.controls', 'javafx.fxml', 'javafx.media']
 }
 
+// Le bootstrap est installé une seule fois (avec le runtime) puis met à jour et lance le launcher.
+// Il est volontairement indépendant du reste : ni code du launcher, ni JavaFX, et son jar ne
+// porte aucun numéro de version. Voir BootstrapMain pour ce qui ne doit jamais changer.
+sourceSets {
+    bootstrap {
+        java.srcDir 'src/bootstrap/java'
+    }
+}
+
 dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.0'
+    bootstrapImplementation 'com.fasterxml.jackson.core:jackson-databind:2.20.0'
 
+    testImplementation sourceSets.bootstrap.output
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -64,16 +75,102 @@ processResources {
     }
 }
 
-tasks.register('createInstaller') {
+tasks.named('processBootstrapResources') {
+    from('src/main/resources/fr/deitycube/launcher/ui/assets/logo.png')
+}
+
+tasks.register('bootstrapJar', Jar) {
     group = 'distribution'
-    description = 'Génère les installeurs natifs (Windows .exe via WiX, Linux .deb/.rpm) via jpackage.'
+    description = 'Jar du bootstrap (nom et contenu stables d\'une version à l\'autre).'
+
+    archiveBaseName = 'deitycube-bootstrap'
+    archiveVersion = ''
+    from sourceSets.bootstrap.output
+
+    // Outil de build, inutile (et à ne pas livrer) dans le programme installé chez les joueurs.
+    exclude '**/PayloadBuilder*.class'
+
+    // Même contenu => même fichier, octet pour octet : l'empreinte du bootstrap ne bouge pas
+    // à chaque build, ce qui laisse sa réputation auprès des antivirus s'accumuler.
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+
+    manifest {
+        attributes 'Main-Class': 'fr.deitycube.bootstrap.BootstrapMain'
+    }
+}
+
+tasks.register('bootstrapDist', Sync) {
+    group = 'distribution'
+    description = 'Rassemble le jar du bootstrap et ses dépendances (entrée de jpackage).'
+
+    into layout.buildDirectory.dir('bootstrap-dist/lib')
+    from tasks.named('bootstrapJar')
+    from configurations.bootstrapRuntimeClasspath
+}
+
+// Le launcher lui-même, tel que le bootstrap le télécharge : un zip par OS (JavaFX est propre à
+// l'OS), à construire sur cet OS. Signé si PAYLOAD_SIGNING_KEY (ou -PpayloadSigningKeyFile) est
+// fourni ; -PrequireSigning=true fait échouer le build sinon (à utiliser pour une release).
+tasks.register('createPayload', JavaExec) {
+    group = 'distribution'
+    description = 'Génère le payload du launcher (zip + .sha256 + .sig) téléchargé par le bootstrap.'
 
     dependsOn tasks.named('installDist')
 
     def currentOs = org.gradle.internal.os.OperatingSystem.current()
+    def platform = currentOs.isWindows() ? 'windows' : (currentOs.isLinux() ? 'linux' : 'unsupported')
+    def payloadDir = layout.buildDirectory.dir('payload')
+    def payloadVersion = project.version.toString()
+
+    classpath = sourceSets.bootstrap.runtimeClasspath
+    mainClass = 'fr.deitycube.bootstrap.PayloadBuilder'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+
+    args = [
+            '--lib-dir', layout.buildDirectory.dir("install/${project.name}/lib").get().asFile.absolutePath,
+            '--out', payloadDir.get().file("DeityCubeLauncher-payload-${payloadVersion}-${platform}.zip").asFile.absolutePath,
+            '--version', payloadVersion,
+            '--platform', platform,
+            '--main-class', application.mainClass.get()
+    ]
+
+    launcherJvmOptions.each { args '--jvm-arg', it }
+
+    if (project.hasProperty('payloadSigningKeyFile')) {
+        args '--private-key-file', project.payloadSigningKeyFile
+    }
+
+    if (project.hasProperty('requireSigning')) {
+        args '--require-signature'
+    }
+
+    doFirst {
+
+        if (platform == 'unsupported') {
+            throw new GradleException("'createPayload' ne prend en charge que Windows et Linux.")
+        }
+
+        if (!(payloadVersion ==~ /\d+(\.\d+){1,3}/)) {
+            throw new GradleException("Version '${payloadVersion}' invalide pour un payload : passez -PreleaseVersion=x.y.z")
+        }
+
+        delete(payloadDir)
+    }
+}
+
+def bootstrapJvmOptions = ['-Xms16m', '-Xmx96m', '-XX:+UseSerialGC']
+
+tasks.register('createInstaller') {
+    group = 'distribution'
+    description = 'Génère les installeurs natifs du bootstrap (Windows .exe via WiX, Linux .deb/.rpm) via jpackage.'
+
+    dependsOn tasks.named('bootstrapDist')
+
+    def currentOs = org.gradle.internal.os.OperatingSystem.current()
     def exeSuffix = currentOs.isWindows() ? '.exe' : ''
 
-    def installDir = layout.buildDirectory.dir("install/${project.name}/lib")
+    def installDir = layout.buildDirectory.dir('bootstrap-dist/lib')
     def outputDir = layout.buildDirectory.dir('jpackage')
     def runtimeImageDir = layout.buildDirectory.dir('jpackage-runtime')
 
@@ -137,14 +234,14 @@ tasks.register('createInstaller') {
                 '--input', installDir.get().asFile.absolutePath,
                 '--dest', outputDir.get().asFile.absolutePath,
                 '--name', appDisplayName,
-                '--main-jar', "${project.name}-${project.version}.jar",
-                '--main-class', 'fr.deitycube.launcher.Main',
+                '--main-jar', 'deitycube-bootstrap.jar',
+                '--main-class', 'fr.deitycube.bootstrap.BootstrapMain',
                 '--app-version', project.version.toString(),
                 '--vendor', 'DeityCube',
                 '--description', 'Official launcher for the DeityCube modpack',
                 '--copyright', "Copyright (c) ${new Date().format('yyyy')} DeityCube",
                 '--license-file', file('LICENSE').absolutePath
-        ] + launcherJvmOptions.collectMany { ['--java-options', it] }
+        ] + bootstrapJvmOptions.collectMany { ['--java-options', it] }
 
         if (currentOs.isWindows()) {
 

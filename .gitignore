@@ -44,3 +44,6 @@ bin/
 
 ### Scripts VPS ###
 /scripts/
+
+### Clés de signature des payloads (ne jamais committer la clé privée) ###
+*.key

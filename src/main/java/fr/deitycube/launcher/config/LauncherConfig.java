@@ -15,9 +15,6 @@ public final class LauncherConfig {
     public static final String DEITYCUBE_MANIFEST_URL =
             "https://deitycube.fr/downloads/deitycube_manifest.json";
 
-    public static final String LAUNCHER_UPDATE_MANIFEST_URL =
-            "https://deitycube.fr/downloads/launcher_manifest.json";
-
     public static final String WEBSITE_URL = "https://deitycube.fr";
 
     public static final String SIGNUP_URL = WEBSITE_URL + "/compte/inscription";
@@ -30,8 +27,6 @@ public final class LauncherConfig {
      */
     public static final String DEITYCOMPTE_API_URL =
             System.getProperty("deitycube.api", WEBSITE_URL + "/api/launcher/");
-
-    public static final String LAUNCHER_INSTALL_NAME = "DeityCubeLauncher";
 
     public static final String DEFAULT_MODPACK_PROFILE =
             "Max";

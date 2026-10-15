@@ -1,10 +1,24 @@
 name: Build installers
 
+# Deux livrables par OS :
+#  - l'installeur (bootstrap + runtime), pour les nouveaux joueurs ;
+#  - le payload signé (le launcher lui-même), que le bootstrap télécharge pour s'installer
+#    et se mettre à jour (voir BootstrapMain). C'est lui qui change à chaque version.
+
 on:
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version x.y.z à construire (obligatoire pour un lancement manuel)"
+        required: true
+
+env:
+  # Le nom des fichiers générés doit toujours correspondre au tag (ou à la version saisie), jamais
+  # à un numéro oublié dans build.gradle. Le "v" éventuel est retiré dans chaque étape.
+  RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
 
 jobs:
   windows:
@@ -23,22 +37,32 @@ jobs:
         shell: pwsh
         run: echo "$env:WIX\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # Le nom des fichiers générés (jar/.exe) doit toujours correspondre au tag qui a déclenché
-      # le build, jamais à un numéro de version oublié dans build.gradle.
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $gradleArgs = @('createInstaller', '--no-daemon')
-          if ($env:GITHUB_REF -like 'refs/tags/*') {
-            $version = $env:GITHUB_REF_NAME -replace '^v', ''
-            $gradleArgs += "-PreleaseVersion=$version"
-          }
-          ./gradlew.bat @gradleArgs
+          $version = $env:RELEASE_VERSION -replace '^v', ''
+          ./gradlew.bat createInstaller "-PreleaseVersion=$version" --no-daemon
+
+      # La clé privée n'est exposée qu'à cette étape. -PrequireSigning fait échouer le build si
+      # elle est absente : on ne publie jamais un payload non signé (aucun bootstrap n'en voudrait).
+      - name: Build signed payload
+        shell: pwsh
+        env:
+          PAYLOAD_SIGNING_KEY: ${{ secrets.PAYLOAD_SIGNING_KEY }}
+        run: |
+          $version = $env:RELEASE_VERSION -replace '^v', ''
+          ./gradlew.bat createPayload "-PreleaseVersion=$version" -PrequireSigning=true --no-daemon
 
       - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: build/jpackage/*.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-payload
+          path: build/payload/*
           if-no-files-found: error
 
   linux:
@@ -57,17 +81,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot
 
-      # Le nom des fichiers générés (jar/.deb/.rpm) doit toujours correspondre au tag qui a
-      # déclenché le build, jamais à un numéro de version oublié dans build.gradle.
       - name: Build Linux installers
         run: |
           chmod +x ./gradlew
-          gradle_args=(createInstaller --no-daemon)
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            version="${GITHUB_REF_NAME#v}"
-            gradle_args+=("-PreleaseVersion=$version")
-          fi
-          ./gradlew "${gradle_args[@]}"
+          ./gradlew createInstaller "-PreleaseVersion=${RELEASE_VERSION#v}" --no-daemon
+
+      - name: Build signed payload
+        env:
+          PAYLOAD_SIGNING_KEY: ${{ secrets.PAYLOAD_SIGNING_KEY }}
+        run: ./gradlew createPayload "-PreleaseVersion=${RELEASE_VERSION#v}" -PrequireSigning=true --no-daemon
 
       - uses: actions/upload-artifact@v7
         with:
@@ -75,6 +97,12 @@ jobs:
           path: |
             build/jpackage/*.deb
             build/jpackage/*.rpm
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-payload
+          path: build/payload/*
           if-no-files-found: error
 
   release:
@@ -95,3 +123,5 @@ jobs:
             artifacts/windows-installer/*.exe
             artifacts/linux-installers/*.deb
             artifacts/linux-installers/*.rpm
+            artifacts/windows-payload/*
+            artifacts/linux-payload/*

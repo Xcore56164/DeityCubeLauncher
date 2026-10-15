@@ -26,14 +26,9 @@ the modpack, then launches the game — no manual file handling required.
   downloaded file is verified against a SHA-1/SHA-256 checksum).
 - Multiple modpack profiles to choose from (server-defined via the DeityCube manifest).
 - Adjustable allocated RAM, option to keep the launcher open while the game is running.
-- **Built-in self-update**: the launcher checks for a new version on startup and offers to
-  install it (download verified by SHA-256). On Windows the installer launches with a visible
-  progress bar and the launcher closes, ready for you to relaunch once it's done; on Linux the
-  downloaded `.deb`/`.rpm` is handed off to your system's package manager, which will ask for
-  your password to finish the install. Neither platform waits on or auto-restarts after the
-  installer: on Windows in particular, the update is a major-upgrade MSI (uninstalls the old
-  version before installing the new one), and blocking on that process while an antivirus might
-  kill it mid-way is a good way to end up with neither version installed.
+- **Safe self-update** through a small, never-changing *bootstrap* (see [Updating](#updating)):
+  signed downloads, installed next to the current version, automatic rollback — on both Windows
+  and Linux, with no administrator rights.
 - Dedicated **logs** for every run (launcher and game), viewable directly from the launcher
   settings.
 
@@ -55,17 +50,33 @@ sudo dnf install ./deitycubelauncher-x.y.z.x86_64.rpm  # Fedora/RHEL
 A menu entry is created automatically. The required Java runtime is bundled with every
 installer: no separate Java installation is needed on either platform.
 
+The installer only contains the *bootstrap* and the Java runtime. On first launch the bootstrap
+downloads the launcher itself (about 20 MB), so an internet connection is needed once.
+
 ## Updating
 
-The launcher automatically checks whether a new version is available every time it starts. If
-one is found, it asks for confirmation before downloading it.
+What you install is a tiny program, the **bootstrap**, that never changes from one release to
+the next. Each time you start DeityCube Launcher it checks for a newer launcher, then starts it:
 
-- **Windows**: the installer launches (visible progress bar, no input needed) and the launcher
-  closes right away — it does not wait for the install to finish, so relaunch DeityCube Launcher
-  yourself once it's done.
-- **Linux**: since installing a `.deb`/`.rpm` requires root privileges, the downloaded package
-  is opened with your desktop's package manager (GNOME Software, Discover...) instead — approve
-  the installation there, then relaunch DeityCube Launcher yourself.
+1. If a new version exists, it asks you whether to update (you can say "later").
+2. The new version is downloaded and its **Ed25519 signature is verified** — a payload that was
+   not published by DeityCube is rejected, even if the download server were compromised.
+3. It is extracted **next to** the current version, which is never modified.
+4. It waits a few seconds so your antivirus can scan the new files, then re-checks every file.
+   If one disappeared or changed (typically an antivirus quarantine), it tells you which folder
+   to add to your antivirus exclusions and offers to retry; nothing has been replaced yet.
+5. Only then does the new version become the active one. If it fails to start, the bootstrap
+   automatically goes back to the previous version and stops proposing the broken one.
+
+There is no uninstall/reinstall step, no installer to run, and no administrator password, on
+Windows and Linux alike. The previous major-upgrade installer flow could leave a player with
+nothing installed when an antivirus killed the installer halfway.
+
+If a future launcher needs a newer bootstrap, the bootstrap says so and sends you to the
+download page to reinstall (rare by design).
+
+> **Migrating from an older launcher** (before the bootstrap): the old launcher updates itself
+> one last time through the previous mechanism, by running the new installer.
 
 ## Data and logs
 
@@ -78,10 +89,14 @@ All launcher data is stored in a single per-user folder:
 
 | Folder/file      | Contents                                                        |
 |-------------------|------------------------------------------------------------------|
+| `launcher/`       | The launcher itself: `versions/<x.y.z>/` (kept: current + previous), `current`, `previous` |
 | `game/`           | Minecraft, NeoForge, libraries, assets, modpack                  |
-| `cache/`          | Temporary files (manifests, downloaded installers)                |
-| `logs/`           | `launcher-*.log` (launcher activity) and `game-*.log` (game output) |
+| `cache/`          | Temporary files (manifests)                                       |
+| `logs/`           | `bootstrap.log`, `launcher-*.log` (launcher activity) and `game-*.log` (game output) |
 | `settings.json`   | User preferences (profile, RAM, account...)                       |
+
+If your antivirus complains about files under `launcher/`, adding that folder to its exclusions
+is enough.
 
 The "View logs" button in the launcher settings opens this `logs/` folder directly.
 
@@ -94,56 +109,102 @@ Requirements: JDK 21 (resolved automatically via the Gradle toolchain).
 ./gradlew build    # compile and run the tests
 ```
 
-### Building installers
+### Layout
+
+| Part | What it is |
+|------|------------|
+| `src/main/…` | The launcher (JavaFX). Shipped as the **payload**, downloaded by the bootstrap. |
+| `src/bootstrap/…` | The **bootstrap**: installed once, then frozen. Depends on nothing from the launcher (no JavaFX). |
+| `src/test/…` | Unit tests of the bootstrap (signature, download, extraction, rollback, antivirus retry…). |
+
+Anything the bootstrap and a payload must agree on (data folder layout, manifest keys read by
+the bootstrap, `payload.json` schema, signed message, embedded public key) is marked
+`CONTRAT FIGÉ` in the code: changing it breaks every installed bootstrap. Everything else can
+evolve freely, because it ships in the payload.
+
+### One-time setup: payload signing key
+
+Payloads are signed with Ed25519. The private key lives only in GitHub secrets (never on the
+VPS); the public key is compiled into the bootstrap, so **do this before building the first
+installer** — it cannot be added later without reinstalling everywhere.
 
 ```bash
-./gradlew createInstaller
+java tools/GenerateSigningKey.java
 ```
 
-This produces the installer(s) for whichever OS it runs on — `jpackage` cannot cross-compile,
-so a `.exe` must be built on Windows and `.deb`/`.rpm` on Linux. Requirements:
+1. Paste the printed public key into `PayloadSignature.EMBEDDED_PUBLIC_KEY` and commit it.
+2. Put the content of the generated private-key file in the GitHub secret
+   `PAYLOAD_SIGNING_KEY` (Settings → Secrets and variables → Actions), keep an offline backup,
+   then delete the file. Losing the key means reinstalling the bootstrap for every player.
+
+Until the public key is set, a bootstrap refuses to install anything.
+
+### Building installers and payloads
+
+```bash
+./gradlew createInstaller -PreleaseVersion=1.1.0    # bootstrap + runtime (.exe, or .deb/.rpm)
+./gradlew createPayload   -PreleaseVersion=1.1.0    # the launcher, as build/payload/*.zip(+.sig)
+```
+
+`createPayload` signs with the key from the `PAYLOAD_SIGNING_KEY` environment variable (or
+`-PpayloadSigningKeyFile=path`); add `-PrequireSigning=true` to fail instead of producing an
+unsigned payload (the CI does). Both produce the artifacts for whichever OS they run on
+(`jpackage` cannot cross-compile and the payload bundles OS-specific JavaFX). Requirements:
 
 - **Windows**: [WiX Toolset](https://wixtoolset.org/) v3.x (`candle`/`light`) on the `PATH`.
 - **Linux**: `rpm` and `fakeroot` packages installed (`dpkg-deb` for `.deb` is normally already
   present on Debian-based systems).
 
 [.github/workflows/build-installers.yml](.github/workflows/build-installers.yml) builds both
-automatically on GitHub Actions (Windows + Linux runners) and attaches the artifacts to a
-GitHub Release whenever a `v*.*.*` tag is pushed:
+automatically on GitHub Actions (Windows + Linux runners) and attaches everything to a GitHub
+Release whenever a `v*.*.*` tag is pushed. The version always comes from the tag:
 
 ```bash
 git tag v1.1.0
 git push --tags
 ```
 
+(A manual run of the workflow asks for the version.) Most releases only change the launcher:
+players receive them as a payload through the bootstrap, and the installers are only needed by
+new players.
+
 ### Update manifest format
 
-The self-update system (`LauncherUpdater`) reads a JSON manifest from the URL configured as
-`LAUNCHER_UPDATE_MANIFEST_URL` in `LauncherConfig`, one platform key per supported target:
+The bootstrap reads `launcher_manifest.json` (URL fixed in `BootstrapEnvironment`). The `payload`
+block is what current bootstraps use; the `windows` / `linux_deb` / `linux_rpm` installer keys
+are only read by older launchers (no bootstrap) to migrate once, and can be dropped when none
+remain:
 
 ```json
 {
   "version": "1.1.0",
   "notes": "What's new in this release.",
+  "bootstrap_protocol": 1,
+  "payload": {
+    "windows": { "url": "https://deitycube.fr/downloads/DeityCubeLauncher-payload-1.1.0-windows.zip", "sha256": "...", "signature": "<base64>" },
+    "linux":   { "url": "https://deitycube.fr/downloads/DeityCubeLauncher-payload-1.1.0-linux.zip",   "sha256": "...", "signature": "<base64>" }
+  },
   "windows":   { "installer_url": "https://deitycube.fr/downloads/DeityCubeLauncher-1.1.0.exe", "sha256": "..." },
   "linux_deb": { "installer_url": "https://deitycube.fr/downloads/deitycubelauncher_1.1.0_amd64.deb", "sha256": "..." },
   "linux_rpm": { "installer_url": "https://deitycube.fr/downloads/deitycubelauncher-1.1.0.x86_64.rpm", "sha256": "..." }
 }
 ```
 
-A platform key can be omitted if that build isn't ready yet — users on that platform simply
-won't be offered the update until it's added. `sha256` is the checksum of the corresponding
-installer file (e.g. `sha256sum file` on Linux, `Get-FileHash file -Algorithm SHA256` on
-Windows).
+A platform can be omitted while its build isn't ready: players on it just aren't offered the
+update. `signature` is produced by the CI (a `.sig` file next to each payload) and binds the
+payload to its version, platform and hash. `bootstrap_protocol` only needs raising if a payload
+requires a newer bootstrap.
 
 ### Deploying a release to the server
 
-[scripts/launcher-deploy.sh](scripts/launcher-deploy.sh) automates the manifest step above: run
-on the VPS after tagging and pushing a release, it downloads that release's installers from
-GitHub and regenerates `launcher_manifest.json` for you (SHA-256 included, release notes pulled
-from the GitHub Release body).
+[scripts/launcher-deploy.sh](scripts/launcher-deploy.sh) automates the manifest step: run on the
+VPS after the release has finished building in CI, it downloads that release's payloads,
+signatures and installers from GitHub and regenerates `launcher_manifest.json` (SHA-256 computed,
+signatures copied as produced by the CI, release notes taken from the GitHub Release body). The
+VPS never holds the signing key, so even a compromised server cannot get a payload of its own
+accepted.
 
-One-time setup on the VPS:
+One-time setup on the VPS (copy the script again whenever it changes):
 
 ```bash
 sudo cp scripts/launcher-deploy.sh /usr/local/bin/launcher-deploy
@@ -151,15 +212,25 @@ sudo chmod +x /usr/local/bin/launcher-deploy
 sudo apt install -y jq   # required, curl/sha256sum are normally already present
 ```
 
-Adjust `DOWNLOADS_DIR` (where `https://deitycube.fr/downloads/` is actually served from) if it
-isn't `/var/www/deitycube/downloads` — either edit the defaults at the top of the script, or
-override them in `/etc/deitycube/launcher-deploy.conf`.
-
-Usage, after a release has finished building in CI:
+`DOWNLOADS_DIR` (where `https://deitycube.fr/downloads/` is actually served from) defaults to
+`/var/www/deitycube-downloads`; edit the defaults at the top of the script, or override them in
+`/etc/deitycube/launcher-deploy.conf`.
 
 ```bash
 launcher-deploy 1.1.0
 ```
+
+Old payload archives are kept on the server; delete the ones you no longer need.
+
+### Testing the bootstrap locally
+
+`./gradlew test` covers the logic (including hostile cases: tampered archive, forged or replayed
+signature, path traversal, files removed by an antivirus mid-install). For a full run, serve a
+manifest and a payload on `localhost` and start the bootstrap with:
+`DEITYCUBE_MANIFEST_URL=http://127.0.0.1:8123/launcher_manifest.json`,
+`DEITYCUBE_PAYLOAD_PUBKEY=<test public key>`, `DEITYCUBE_BOOTSTRAP_ROOT=<throwaway folder>`,
+`DEITYCUBE_BOOTSTRAP_AUTO=1` (accept everything, no window), `DEITYCUBE_AV_WAIT_SECONDS=1`.
+These overrides are ignored unless the manifest URL is a loopback address.
 
 ## License
 
