@@ -119,6 +119,28 @@ class VersionStoreTest {
     }
 
     @Test
+    void cleanupNeverFailsNorWaitsWhenThereIsNothingToRemove() throws Exception {
+
+        // Premier démarrage : ni versions/ ni staging/. Le ménage ne doit rien lever ni attendre.
+        long start = System.nanoTime();
+
+        store.cleanup();
+
+        assertTrue(System.nanoTime() - start < 2_000_000_000L);
+        assertTrue(FileUtil.deleteBestEffort(tmp.resolve("n-existe-pas")));
+    }
+
+    @Test
+    void bestEffortDeletionRemovesAWholeTree() throws Exception {
+
+        Path tree = Files.createDirectories(tmp.resolve("tree/a/b"));
+        Files.writeString(tree.resolve("f.txt"), "x");
+
+        assertTrue(FileUtil.deleteBestEffort(tmp.resolve("tree")));
+        assertFalse(Files.exists(tmp.resolve("tree")));
+    }
+
+    @Test
     void ignoresPointerFilesThatAreNotValidVersions() throws Exception {
 
         Files.createDirectories(tmp.resolve("launcher"));

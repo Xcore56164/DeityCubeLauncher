@@ -81,6 +81,40 @@ final class FileUtil {
         throw last;
     }
 
+    /**
+     * Supprime ce qui peut l'être, sans jamais attendre : un fichier encore utilisé (un ancien
+     * launcher resté ouvert verrouille ses jars sous Windows) est simplement laissé en place et
+     * sera retenté au prochain démarrage. À réserver au ménage, jamais à ce dont dépend une
+     * installation (voir {@link #deleteRecursively(Path)} pour ça).
+     *
+     * @return {@code true} si tout a été supprimé
+     */
+    static boolean deleteBestEffort(Path path) {
+
+        if (!Files.exists(path)) {
+            return true;
+        }
+
+        boolean complete = true;
+
+        try (Stream<Path> walk = Files.walk(path)) {
+
+            for (Path entry : walk.sorted(Comparator.reverseOrder()).toList()) {
+
+                try {
+                    Files.deleteIfExists(entry);
+                } catch (IOException e) {
+                    complete = false;
+                }
+            }
+
+        } catch (IOException e) {
+            return false;
+        }
+
+        return complete;
+    }
+
     static void moveWithRetry(Path source, Path target) throws IOException {
 
         IOException last = null;

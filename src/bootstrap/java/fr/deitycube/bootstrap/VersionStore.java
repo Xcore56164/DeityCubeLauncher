@@ -130,7 +130,13 @@ final class VersionStore {
         return fallback;
     }
 
-    /** Supprime les versions qui ne sont ni active ni de repli, et les restes de staging. */
+    /**
+     * Supprime les versions qui ne sont ni active ni de repli, et les restes de staging.
+     * <p>
+     * Au mieux et sans attente : une ancienne version dont un launcher est encore ouvert est
+     * verrouillée par Windows ; la retenter pendant des secondes retarderait le lancement du
+     * launcher pour rien, alors qu'elle sera simplement supprimée au démarrage suivant.
+     */
     void cleanup() throws IOException {
 
         Set<String> keep = new HashSet<>();
@@ -144,14 +150,16 @@ final class VersionStore {
 
                 for (Path child : children.toList()) {
 
-                    if (!keep.contains(child.getFileName().toString())) {
-                        FileUtil.deleteRecursively(child);
+                    if (!keep.contains(child.getFileName().toString())
+                            && !FileUtil.deleteBestEffort(child)) {
+
+                        BootstrapLog.info("Ancienne version encore utilisée, suppression repoussée : " + child.getFileName());
                     }
                 }
             }
         }
 
-        FileUtil.deleteRecursively(stagingDirectory());
+        FileUtil.deleteBestEffort(stagingDirectory());
     }
 
     private Optional<String> readPointer(String name) {
