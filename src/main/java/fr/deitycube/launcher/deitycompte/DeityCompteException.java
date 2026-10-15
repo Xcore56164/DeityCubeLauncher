@@ -37,14 +37,4 @@ public final class DeityCompteException extends IOException {
         return SESSION_INVALIDE.equals(code);
     }
 
-    /**
-     * Problème du DeityCompte lui-même (session, sanction, CGU, liaison Microsoft absente) :
-     * bloque le jeu, même quand le mode hors ligne est autorisé.
-     */
-    public boolean isAccountProblem() {
-        return switch (code) {
-            case SESSION_INVALIDE, "compte_bloque", "conditions_a_accepter", "microsoft_non_lie" -> true;
-            default -> false;
-        };
-    }
 }

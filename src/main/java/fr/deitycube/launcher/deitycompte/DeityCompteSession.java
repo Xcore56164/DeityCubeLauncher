@@ -6,7 +6,6 @@ import fr.deitycube.launcher.auth.MinecraftAuthenticator;
 import fr.deitycube.launcher.auth.MinecraftProfile;
 import fr.deitycube.launcher.auth.MinecraftProfileService;
 import fr.deitycube.launcher.auth.MinecraftToken;
-import fr.deitycube.launcher.auth.OfflineAuthenticator;
 import fr.deitycube.launcher.auth.XboxLiveAuthenticator;
 import fr.deitycube.launcher.auth.XboxLiveToken;
 import fr.deitycube.launcher.auth.XstsAuthenticator;
@@ -30,7 +29,6 @@ public final class DeityCompteSession {
 
     private AuthenticationResult gameAuthentication;
     private Instant gameAuthenticationValidUntil = Instant.EPOCH;
-    private String offlineFallbackReason;
 
     public DeityCompteSession(
             String sessionToken,
@@ -53,57 +51,12 @@ public final class DeityCompteSession {
     }
 
     /**
-     * Profil et jeton avec lesquels lancer le jeu : compte Minecraft officiel si possible,
-     * sinon mode hors ligne ("crack") sous le nom de jeu du DeityCompte, quand le site
-     * l'autorise. Les problèmes du DeityCompte lui-même bloquent toujours le lancement.
+     * Compte Minecraft officiel avec lequel lancer le jeu, gardé en mémoire (jamais sur le
+     * disque) tant que son jeton reste valable. Sinon : jeton Microsoft demandé à deitycube.fr,
+     * puis Xbox Live → XSTS → Minecraft Services depuis la connexion du joueur. Tout échec
+     * bloque le lancement : il n'y a pas de mode hors ligne.
      */
     public synchronized AuthenticationResult resolveGameAuthentication()
-            throws IOException, InterruptedException {
-
-        offlineFallbackReason = null;
-
-        try {
-            return resolveOfficialAuthentication();
-
-        } catch (DeityCompteException e) {
-
-            if (e.isAccountProblem() || !account.isOfflineFallbackAllowed()) {
-                throw e;
-            }
-            return offlineFallback(e);
-
-        } catch (IOException e) {
-
-            if (!account.isOfflineFallbackAllowed()) {
-                throw e;
-            }
-            return offlineFallback(e);
-        }
-    }
-
-    /** Raison du dernier passage en mode hors ligne, ou null si le compte officiel a été utilisé. */
-    public synchronized String getOfflineFallbackReason() {
-        return offlineFallbackReason;
-    }
-
-    private AuthenticationResult offlineFallback(IOException cause) {
-
-        offlineFallbackReason = cause.getMessage();
-
-        System.out.println(
-                "Connexion au compte Minecraft officiel impossible, passage en mode hors ligne : "
-                        + offlineFallbackReason
-        );
-
-        return OfflineAuthenticator.authenticate(account.getOfflineName());
-    }
-
-    /**
-     * Compte Minecraft officiel, gardé en mémoire (jamais sur le disque) tant que son jeton
-     * reste valable. Sinon : jeton Microsoft demandé à deitycube.fr, puis Xbox Live → XSTS →
-     * Minecraft Services depuis la connexion du joueur.
-     */
-    private AuthenticationResult resolveOfficialAuthentication()
             throws IOException, InterruptedException {
 
         if (gameAuthentication != null

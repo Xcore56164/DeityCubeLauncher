@@ -69,7 +69,7 @@ public final class LauncherApp extends Application {
     private LauncherSettings settings;
     private DeityCubeManifest manifest;
 
-    // DeityCompte connecté (le compte Minecraft, officiel ou hors ligne, est résolu au lancement).
+    // DeityCompte connecté (le compte Minecraft officiel est résolu au lancement du jeu).
     private DeityCompteSession deityCompteSession;
 
     public static void main(String[] args) {

@@ -72,8 +72,6 @@
                 <VBox spacing="4">
                     <Label text="EN JEU" styleClass="section-label"/>
                     <Label fx:id="gameIdentityLabel" styleClass="value-label" wrapText="true"/>
-                    <Label fx:id="gameModeNoteLabel" styleClass="welcome-sub-label" wrapText="true"
-                           visible="false" managed="false"/>
                 </VBox>
 
                 <Label text="Gérer mon compte sur deitycube.fr" styleClass="footer-link"

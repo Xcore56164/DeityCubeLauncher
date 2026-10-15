@@ -12,7 +12,6 @@ public final class DeityCompteAccount {
     private final boolean microsoftRelinkRequired;
     private final String minecraftName;
     private final boolean minecraftServicesEnabled;
-    private final String offlineName;
 
     private DeityCompteAccount(
             String pseudo,
@@ -21,8 +20,7 @@ public final class DeityCompteAccount {
             String microsoftGamertag,
             boolean microsoftRelinkRequired,
             String minecraftName,
-            boolean minecraftServicesEnabled,
-            String offlineName
+            boolean minecraftServicesEnabled
     ) {
         this.pseudo = pseudo;
         this.avatarUrl = avatarUrl;
@@ -31,14 +29,12 @@ public final class DeityCompteAccount {
         this.microsoftRelinkRequired = microsoftRelinkRequired;
         this.minecraftName = minecraftName;
         this.minecraftServicesEnabled = minecraftServicesEnabled;
-        this.offlineName = offlineName;
     }
 
     static DeityCompteAccount fromJson(JsonNode json) {
 
         JsonNode microsoft = json.path("microsoft");
         JsonNode minecraft = json.path("minecraft");
-        JsonNode offline = json.path("hors_ligne");
 
         return new DeityCompteAccount(
                 json.path("pseudo").asText(""),
@@ -47,8 +43,7 @@ public final class DeityCompteAccount {
                 microsoft.isObject() ? microsoft.path("gamertag").asText(null) : null,
                 microsoft.path("reconnexion_requise").asBoolean(false),
                 minecraft.isObject() ? minecraft.path("nom").asText(null) : null,
-                json.path("minecraft_services").asBoolean(false),
-                offline.isObject() ? offline.path("nom").asText(null) : null
+                json.path("minecraft_services").asBoolean(false)
         );
     }
 
@@ -81,15 +76,4 @@ public final class DeityCompteAccount {
         return minecraftServicesEnabled;
     }
 
-    /**
-     * Nom de jeu du mode hors ligne ("crack"), attribué par le site. Null si le site n'autorise
-     * pas ce mode : un échec de connexion au compte Minecraft officiel bloque alors le lancement.
-     */
-    public String getOfflineName() {
-        return offlineName;
-    }
-
-    public boolean isOfflineFallbackAllowed() {
-        return offlineName != null && !offlineName.isBlank();
-    }
 }

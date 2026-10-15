@@ -1,7 +1,6 @@
 package fr.deitycube.launcher.ui.dashboard;
 
 import com.sun.management.OperatingSystemMXBean;
-import fr.deitycube.launcher.auth.AuthenticationMode;
 import fr.deitycube.launcher.auth.AuthenticationResult;
 import fr.deitycube.launcher.config.AppVersion;
 import fr.deitycube.launcher.config.LauncherConfig;
@@ -128,9 +127,6 @@ public final class DashboardController {
     @FXML
     private Label gameIdentityLabel;
 
-    @FXML
-    private Label gameModeNoteLabel;
-
     private LauncherApp app;
     private final InstallationPipeline pipeline = new InstallationPipeline();
     private String selectedProfile;
@@ -164,32 +160,16 @@ public final class DashboardController {
                                 : gamertag
         );
 
-        // Avant le premier lancement : identité prévue (le jeu tente toujours le compte
-        // officiel d'abord, voir DeityCompteSession).
-        if (account.isMinecraftServicesEnabled() || !account.isOfflineFallbackAllowed()) {
-            gameIdentityLabel.setText(
-                    (account.getMinecraftName() != null ? account.getMinecraftName() : "Compte Minecraft")
-                            + " · compte officiel"
-            );
-        } else {
-            gameIdentityLabel.setText(account.getOfflineName() + " · mode hors ligne");
-        }
+        // Pseudo Minecraft connu du site ; remplacé par le profil réel au premier lancement.
+        gameIdentityLabel.setText(
+                (account.getMinecraftName() != null ? account.getMinecraftName() : "Compte Minecraft")
+                        + " · compte officiel"
+        );
     }
 
-    /** Après la connexion au jeu : identité réellement utilisée, et raison d'un mode hors ligne. */
-    private void showGameIdentity(AuthenticationResult authentication, String offlineReason) {
-
-        boolean offline = authentication.getMode() == AuthenticationMode.OFFLINE;
-
-        gameIdentityLabel.setText(
-                authentication.getUsername() + (offline ? " · mode hors ligne" : " · compte officiel")
-        );
-
-        gameModeNoteLabel.setText(
-                offline && offlineReason != null ? "Compte officiel indisponible : " + offlineReason : ""
-        );
-        gameModeNoteLabel.setVisible(offline && offlineReason != null);
-        gameModeNoteLabel.setManaged(offline && offlineReason != null);
+    /** Après la connexion au jeu : profil Minecraft réellement utilisé. */
+    private void showGameIdentity(AuthenticationResult authentication) {
+        gameIdentityLabel.setText(authentication.getUsername() + " · compte officiel");
     }
 
     @FXML
@@ -594,8 +574,7 @@ public final class DashboardController {
             DeityCubeManifest manifest = app.getManifest();
 
             // Compte Minecraft vérifié avant l'installation : un refus (compte suspendu, CGU à
-            // accepter...) s'affiche sans attendre le téléchargement. Si le compte officiel est
-            // indisponible et que le site l'autorise, le jeu passe en mode hors ligne.
+            // accepter, licence absente...) s'affiche sans attendre le téléchargement.
             AuthenticationResult authentication = null;
 
             if (!reinstall) {
@@ -607,9 +586,8 @@ public final class DashboardController {
                 authentication = app.resolveGameAuthentication();
 
                 AuthenticationResult resolvedAuthentication = authentication;
-                String offlineReason = app.getDeityCompteSession().getOfflineFallbackReason();
 
-                Platform.runLater(() -> showGameIdentity(resolvedAuthentication, offlineReason));
+                Platform.runLater(() -> showGameIdentity(resolvedAuthentication));
             }
 
             MinecraftResolvedVersion resolved =
