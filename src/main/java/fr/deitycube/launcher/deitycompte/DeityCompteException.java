@@ -12,6 +12,12 @@ public final class DeityCompteException extends IOException {
     /** Session inconnue ou expirée : il faut redemander l'email et le mot de passe. */
     public static final String SESSION_INVALIDE = "session_invalide";
 
+    /** Le rôle du compte n'a pas accès au serveur test (test.php, HTTP 403). */
+    public static final String ACCES_TEST_REFUSE = "acces_test_refuse";
+
+    /** Aucun mod en test : pas de manifeste du serveur test (test.php, HTTP 404). */
+    public static final String SERVEUR_TEST_VIDE = "serveur_test_vide";
+
     private final String code;
     private final String url;
 

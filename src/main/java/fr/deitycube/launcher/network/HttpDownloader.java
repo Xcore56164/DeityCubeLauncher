@@ -11,6 +11,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Map;
 import java.util.function.LongConsumer;
 
 public final class HttpDownloader {
@@ -120,6 +121,27 @@ public final class HttpDownloader {
             String url,
             Path destination,
             String expectedSha256,
+            Map<String, String> requestHeaders
+    ) throws IOException {
+
+        downloadSha256(url, destination, expectedSha256, requestHeaders, NO_PROGRESS);
+    }
+
+    public static void downloadSha256(
+            String url,
+            Path destination,
+            String expectedSha256,
+            LongConsumer onBytesDownloaded
+    ) throws IOException {
+
+        downloadSha256(url, destination, expectedSha256, Map.of(), onBytesDownloaded);
+    }
+
+    public static void downloadSha256(
+            String url,
+            Path destination,
+            String expectedSha256,
+            Map<String, String> requestHeaders,
             LongConsumer onBytesDownloaded
     ) throws IOException {
 
@@ -132,6 +154,7 @@ public final class HttpDownloader {
         Path temporaryFile = downloadToTemporary(
                 url,
                 destination,
+                requestHeaders,
                 onBytesDownloaded
         );
 
@@ -177,6 +200,16 @@ public final class HttpDownloader {
             LongConsumer onBytesDownloaded
     ) throws IOException {
 
+        return downloadToTemporary(url, destination, Map.of(), onBytesDownloaded);
+    }
+
+    private static Path downloadToTemporary(
+            String url,
+            Path destination,
+            Map<String, String> requestHeaders,
+            LongConsumer onBytesDownloaded
+    ) throws IOException {
+
         URI uri = URI.create(url);
 
         if (!"https".equalsIgnoreCase(uri.getScheme())) {
@@ -203,7 +236,12 @@ public final class HttpDownloader {
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(CONNECT_TIMEOUT);
         connection.setReadTimeout(READ_TIMEOUT);
-        connection.setInstanceFollowRedirects(true);
+
+        // Avec des en-têtes (jeton de session), pas de redirection suivie : ils pourraient
+        // partir vers un autre site.
+        connection.setInstanceFollowRedirects(requestHeaders.isEmpty());
+
+        requestHeaders.forEach(connection::setRequestProperty);
 
         try {
             int responseCode = connection.getResponseCode();

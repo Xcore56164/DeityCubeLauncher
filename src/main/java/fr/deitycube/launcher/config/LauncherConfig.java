@@ -30,4 +30,18 @@ public final class LauncherConfig {
 
     public static final String DEFAULT_MODPACK_PROFILE =
             "Max";
+
+    /**
+     * Profil du serveur test, proposé aux comptes qui y ont accès (acces_test) en plus des
+     * profils du manifeste principal. Son manifeste (test.php) le nomme "test".
+     */
+    public static final String TEST_PROFILE =
+            "Test";
+
+    public static final String TEST_MODPACK_PROFILE =
+            "test";
+
+    public static boolean isTestProfile(String profile) {
+        return TEST_PROFILE.equalsIgnoreCase(profile);
+    }
 }

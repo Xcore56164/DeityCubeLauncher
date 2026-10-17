@@ -12,6 +12,7 @@ public final class DeityCompteAccount {
     private final boolean microsoftRelinkRequired;
     private final String minecraftName;
     private final boolean minecraftServicesEnabled;
+    private final boolean testAccess;
 
     private DeityCompteAccount(
             String pseudo,
@@ -20,7 +21,8 @@ public final class DeityCompteAccount {
             String microsoftGamertag,
             boolean microsoftRelinkRequired,
             String minecraftName,
-            boolean minecraftServicesEnabled
+            boolean minecraftServicesEnabled,
+            boolean testAccess
     ) {
         this.pseudo = pseudo;
         this.avatarUrl = avatarUrl;
@@ -29,6 +31,7 @@ public final class DeityCompteAccount {
         this.microsoftRelinkRequired = microsoftRelinkRequired;
         this.minecraftName = minecraftName;
         this.minecraftServicesEnabled = minecraftServicesEnabled;
+        this.testAccess = testAccess;
     }
 
     static DeityCompteAccount fromJson(JsonNode json) {
@@ -43,7 +46,8 @@ public final class DeityCompteAccount {
                 microsoft.isObject() ? microsoft.path("gamertag").asText(null) : null,
                 microsoft.path("reconnexion_requise").asBoolean(false),
                 minecraft.isObject() ? minecraft.path("nom").asText(null) : null,
-                json.path("minecraft_services").asBoolean(false)
+                json.path("minecraft_services").asBoolean(false),
+                json.path("acces_test").asBoolean(false)
         );
     }
 
@@ -74,6 +78,11 @@ public final class DeityCompteAccount {
 
     public boolean isMinecraftServicesEnabled() {
         return minecraftServicesEnabled;
+    }
+
+    /** Rôle avec accès au serveur test (Acces_Serveur_Test) : le profil « Test » est proposé. */
+    public boolean hasTestAccess() {
+        return testAccess;
     }
 
 }

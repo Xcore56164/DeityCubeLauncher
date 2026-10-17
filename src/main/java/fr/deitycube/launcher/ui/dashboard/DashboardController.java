@@ -6,6 +6,7 @@ import fr.deitycube.launcher.config.AppVersion;
 import fr.deitycube.launcher.config.LauncherConfig;
 import fr.deitycube.launcher.deitycompte.DeityCompteAccount;
 import fr.deitycube.launcher.deitycompte.DeityCompteException;
+import fr.deitycube.launcher.deitycube.DeityCubeGameProfile;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.minecraft.MinecraftResolvedVersion;
@@ -45,6 +46,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class DashboardController {
@@ -208,7 +210,14 @@ public final class DashboardController {
 
         DeityCubeManifest manifest = app.getManifest();
 
-        List<String> profiles = List.copyOf(manifest.getProfiles().keySet());
+        List<String> profiles = new ArrayList<>(manifest.getProfiles().keySet());
+
+        // Profil du serveur test : seulement pour les rôles qui y ont accès.
+        if (app.getDeityCompteSession().getAccount().hasTestAccess()
+                && profiles.stream().noneMatch(LauncherConfig::isTestProfile)) {
+
+            profiles.add(LauncherConfig.TEST_PROFILE);
+        }
 
         String savedProfile = app.getSettings().getSelectedProfile();
 
@@ -344,7 +353,7 @@ public final class DashboardController {
 
     @FXML
     private void onOpenGameFolder() {
-        openFolder(GameDirectory.getGameDirectory());
+        openFolder(GameDirectory.getGameDirectory(selectedProfile));
     }
 
     @FXML
@@ -504,6 +513,17 @@ public final class DashboardController {
             return;
         }
 
+        if (DeityCompteException.ACCES_TEST_REFUSE.equals(error.getCode())
+                || DeityCompteException.SERVEUR_TEST_VIDE.equals(error.getCode())) {
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Serveur test");
+            alert.setHeaderText(null);
+            alert.setContentText(error.getMessage());
+            alert.showAndWait();
+            return;
+        }
+
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Erreur");
         alert.setHeaderText("Le lancement du jeu a échoué");
@@ -571,7 +591,25 @@ public final class DashboardController {
         @Override
         protected Void call() throws Exception {
 
-            DeityCubeManifest manifest = app.getManifest();
+            DeityCubeGameProfile gameProfile;
+
+            if (LauncherConfig.isTestProfile(profile)) {
+
+                updateTitle("Serveur test");
+                updateMessage("Récupération des mods en test...");
+                updateProgress(-1, 1);
+
+                String sessionToken = app.getDeityCompteSession().getSessionToken();
+
+                gameProfile = DeityCubeGameProfile.test(
+                        InstallationPipeline.fetchTestManifest(sessionToken),
+                        sessionToken
+                );
+
+            } else {
+
+                gameProfile = DeityCubeGameProfile.main(app.getManifest(), profile);
+            }
 
             // Compte Minecraft vérifié avant l'installation : un refus (compte suspendu, CGU à
             // accepter, licence absente...) s'affiche sans attendre le téléchargement.
@@ -592,8 +630,8 @@ public final class DashboardController {
 
             MinecraftResolvedVersion resolved =
                     reinstall
-                            ? pipeline.reinstall(manifest, profile, this)
-                            : pipeline.install(manifest, profile, this);
+                            ? pipeline.reinstall(gameProfile, this)
+                            : pipeline.install(gameProfile, this);
 
             if (reinstall) {
                 return null;
@@ -606,7 +644,9 @@ public final class DashboardController {
             Process process = new MinecraftLauncher().launch(
                     resolved,
                     authentication,
-                    ramMb
+                    ramMb,
+                    gameProfile.getGameDirectory(),
+                    gameProfile.getServer()
             );
 
             Platform.runLater(() -> {

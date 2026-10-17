@@ -33,9 +33,31 @@ public final class MinecraftLauncher {
             int allocatedRamMb
     ) throws IOException {
 
+        return launch(
+                resolvedVersion,
+                authentication,
+                allocatedRamMb,
+                GameDirectory.getGameDirectory(),
+                null
+        );
+    }
+
+    /**
+     * gameDirectory : dossier de jeu du profil (mods, config, mondes...).
+     * quickPlayServer : serveur (hôte:port) rejoint dès le démarrage, ou null pour le menu.
+     */
+    public Process launch(
+            MinecraftResolvedVersion resolvedVersion,
+            AuthenticationResult authentication,
+            int allocatedRamMb,
+            Path gameDirectory,
+            String quickPlayServer
+    ) throws IOException {
+
         MinecraftLaunchConfiguration configuration =
                 createConfiguration(
-                        resolvedVersion
+                        resolvedVersion,
+                        gameDirectory
                 );
 
         List<String> command =
@@ -45,6 +67,12 @@ public final class MinecraftLauncher {
                         authentication,
                         allocatedRamMb
                 );
+
+        if (quickPlayServer != null) {
+
+            command.add("--quickPlayMultiplayer");
+            command.add(quickPlayServer);
+        }
 
         printLaunchInformation(
                 configuration,
@@ -94,7 +122,8 @@ public final class MinecraftLauncher {
     }
 
     private MinecraftLaunchConfiguration createConfiguration(
-            MinecraftResolvedVersion resolvedVersion
+            MinecraftResolvedVersion resolvedVersion,
+            Path gameDirectory
     ) {
 
         MinecraftArgumentResolver resolver =
@@ -103,7 +132,7 @@ public final class MinecraftLauncher {
         return new MinecraftLaunchConfiguration(
                 resolvedVersion.getId(),
                 resolvedVersion.getMainClass(),
-                GameDirectory.getGameDirectory(),
+                gameDirectory,
                 GameDirectory.getAssetsDirectory(),
                 GameDirectory.getNativesDirectory(
                         resolvedVersion.getGameVersionId()

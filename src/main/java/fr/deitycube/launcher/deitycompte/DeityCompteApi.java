@@ -110,6 +110,43 @@ public final class DeityCompteApi {
         return accessToken;
     }
 
+    /**
+     * Manifeste du modpack du serveur test (format de deitycube_manifest.json, plus l'adresse
+     * du serveur dans "server"), réservé aux rôles qui ont accès au serveur test.
+     */
+    public static JsonNode fetchTestManifest(
+            String sessionToken
+    ) throws IOException, InterruptedException {
+
+        try {
+            return send(
+                    authorized(endpoint("test.php"), sessionToken).GET(),
+                    DEFAULT_TIMEOUT
+            );
+        } catch (DeityCompteException e) {
+
+            String message = testManifestErrorMessage(e.getCode());
+
+            if (message == null) {
+                throw e;
+            }
+
+            throw new DeityCompteException(e.getCode(), message, null, e);
+        }
+    }
+
+    /** Message pour le joueur selon le code d'erreur de test.php (null : message du site). */
+    static String testManifestErrorMessage(String code) {
+
+        return switch (code) {
+            case DeityCompteException.ACCES_TEST_REFUSE ->
+                    "Le serveur test est réservé à l'équipe.";
+            case DeityCompteException.SERVEUR_TEST_VIDE ->
+                    "Aucun mod n'est en test pour le moment.";
+            default -> null;
+        };
+    }
+
     /** Ferme la session côté site (elle disparaît de la liste des appareils du compte). */
     public static void logout(
             String sessionToken,

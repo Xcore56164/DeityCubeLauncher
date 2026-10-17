@@ -2,6 +2,8 @@ package fr.deitycube.launcher.progress;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.deitycube.launcher.config.LauncherConfig;
+import fr.deitycube.launcher.deitycompte.DeityCompteApi;
+import fr.deitycube.launcher.deitycube.DeityCubeGameProfile;
 import fr.deitycube.launcher.deitycube.DeityCubeManifest;
 import fr.deitycube.launcher.deitycube.DeityCubeManifestReader;
 import fr.deitycube.launcher.deitycube.DeityCubePackage;
@@ -27,6 +29,7 @@ import fr.deitycube.launcher.neoforge.NeoForgeProcessor;
 import fr.deitycube.launcher.neoforge.NeoForgeVersionInstaller;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -53,11 +56,35 @@ public final class InstallationPipeline {
         return manifest;
     }
 
+    /**
+     * Manifeste du serveur test, demandé à chaque lancement du profil « Test » (les mods en
+     * test changent souvent). Refus (rôle sans accès, aucun mod en test) : DeityCompteException
+     * avec un message pour le joueur.
+     */
+    public static DeityCubeManifest fetchTestManifest(
+            String sessionToken
+    ) throws IOException, InterruptedException {
+
+        return DeityCubeManifestReader.readTestManifest(
+                DeityCompteApi.fetchTestManifest(sessionToken),
+                URI.create(LauncherConfig.WEBSITE_URL).getHost()
+        );
+    }
+
     public MinecraftResolvedVersion install(
-            DeityCubeManifest manifest,
-            String profileName,
+            DeityCubeGameProfile gameProfile,
             ProgressListener listener
     ) throws Exception {
+
+        DeityCubeManifest manifest =
+                gameProfile.getManifest();
+
+        // Minecraft et NeoForge du profil choisi (le manifeste test peut en demander d'autres).
+        LauncherConfig.MINECRAFT_VERSION =
+                manifest.getMinecraftVersion();
+
+        LauncherConfig.NEOFORGE_VERSION =
+                manifest.getNeoforgeVersion();
 
         listener.indeterminate(
                 "Préparation",
@@ -66,13 +93,17 @@ public final class InstallationPipeline {
 
         DirectoryManager.initialize();
 
+        Files.createDirectories(
+                gameProfile.getGameDirectory()
+        );
+
         MinecraftVersionMetadata minecraft =
                 installMinecraft(listener);
 
         Path neoForgeVersionDirectory =
                 installNeoForge(minecraft, listener);
 
-        installModpack(manifest, profileName, listener);
+        installModpack(gameProfile, listener);
 
         listener.indeterminate(
                 "Préparation",
@@ -83,8 +114,7 @@ public final class InstallationPipeline {
     }
 
     public MinecraftResolvedVersion reinstall(
-            DeityCubeManifest manifest,
-            String profileName,
+            DeityCubeGameProfile gameProfile,
             ProgressListener listener
     ) throws Exception {
 
@@ -100,7 +130,7 @@ public final class InstallationPipeline {
         deleteRecursively(GameDirectory.getCacheDirectory().resolve("deitycube"));
         deleteRecursively(GameDirectory.getCacheDirectory().resolve("neoforge"));
 
-        return install(manifest, profileName, listener);
+        return install(gameProfile, listener);
     }
 
     private void deleteRecursively(Path directory) throws IOException {
@@ -279,19 +309,22 @@ public final class InstallationPipeline {
     }
 
     private void installModpack(
-            DeityCubeManifest manifest,
-            String profileName,
+            DeityCubeGameProfile gameProfile,
             ProgressListener listener
     ) throws Exception {
+
+        DeityCubeManifest manifest =
+                gameProfile.getManifest();
 
         DeityCubePackage profile =
                 selectModpackProfile(
                         manifest,
-                        profileName
+                        gameProfile.getModpackProfile()
                 );
 
         new DeityCubePackageInstaller(
-                GameDirectory.getGameDirectory()
+                gameProfile.getGameDirectory(),
+                gameProfile.getRequestHeaders()
         ).install(
                 manifest,
                 profile,

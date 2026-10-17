@@ -1,5 +1,6 @@
 package fr.deitycube.launcher.filesystem;
 
+import fr.deitycube.launcher.config.LauncherConfig;
 import fr.deitycube.launcher.minecraft.platform.OperatingSystem;
 
 import java.nio.file.Path;
@@ -58,6 +59,22 @@ public final class GameDirectory {
 
     public static Path getGameDirectory() {
         return getRootDirectory().resolve("game");
+    }
+
+    /** Dossier de jeu du profil « Test », à côté de game/ (jamais dedans). */
+    public static Path getTestGameDirectory() {
+        return getGameDirectory(LauncherConfig.TEST_PROFILE);
+    }
+
+    /** Dossier de jeu (mods, config, mondes...) d'un profil du launcher. */
+    public static Path getGameDirectory(String launcherProfile) {
+        return resolveGameDirectory(getRootDirectory(), launcherProfile);
+    }
+
+    static Path resolveGameDirectory(Path rootDirectory, String launcherProfile) {
+        return rootDirectory.resolve(
+                LauncherConfig.isTestProfile(launcherProfile) ? "game-test" : "game"
+        );
     }
 
     public static Path getLibrariesDirectory() {

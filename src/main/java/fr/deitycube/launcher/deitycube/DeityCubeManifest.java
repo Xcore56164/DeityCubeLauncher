@@ -21,6 +21,9 @@ public final class DeityCubeManifest {
 
     private Map<String, DeityCubePackage> profiles;
 
+    // Manifeste du serveur test uniquement : adresse du serveur à rejoindre au lancement.
+    private String server;
+
     public String getModpackVersion() {
         return modpackVersion;
     }
@@ -39,5 +42,10 @@ public final class DeityCubeManifest {
 
     public Map<String, DeityCubePackage> getProfiles() {
         return profiles;
+    }
+
+    /** Adresse du serveur (hôte:port) à rejoindre directement, ou null. */
+    public String getServer() {
+        return server;
     }
 }

@@ -12,17 +12,32 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
 public final class DeityCubePackageInstaller {
 
     private final Path gameDirectory;
+    private final Map<String, String> requestHeaders;
 
     public DeityCubePackageInstaller(
             Path gameDirectory
     ) {
+        this(gameDirectory, Map.of());
+    }
+
+    /**
+     * gameDirectory : seul dossier où les fichiers du modpack sont installés, et où les fichiers
+     * non listés sont supprimés. requestHeaders : envoyés avec chaque téléchargement (jeton de
+     * session pour les fichiers du serveur test).
+     */
+    public DeityCubePackageInstaller(
+            Path gameDirectory,
+            Map<String, String> requestHeaders
+    ) {
         this.gameDirectory = gameDirectory.normalize();
+        this.requestHeaders = Map.copyOf(requestHeaders);
     }
 
     public void install(
@@ -170,7 +185,8 @@ public final class DeityCubePackageInstaller {
                                 relativePath
                         ),
                         destination,
-                        file.getSha256()
+                        file.getSha256(),
+                        requestHeaders
                 );
 
                 counters.downloaded++;
