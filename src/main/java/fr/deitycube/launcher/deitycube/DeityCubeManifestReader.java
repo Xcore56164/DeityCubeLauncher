@@ -43,7 +43,7 @@ public final class DeityCubeManifestReader {
                         DeityCubeManifest.class
                 );
 
-        validate(manifest);
+        validate(manifest, false);
 
         return manifest;
     }
@@ -64,7 +64,9 @@ public final class DeityCubeManifestReader {
                         DeityCubeManifest.class
                 );
 
-        validate(manifest);
+        // Le modpack test met tous ses fichiers dans common (profil "test" sans fichiers
+        // propres), et common lui-même est vide quand aucun mod n'est en test.
+        validate(manifest, true);
 
         requireText(
                 manifest.getServer(),
@@ -129,8 +131,14 @@ public final class DeityCubeManifestReader {
         }
     }
 
+    /**
+     * @param allowEmptyFiles vrai pour le manifeste test : les listes de fichiers doivent être
+     *                        présentes mais peuvent être vides ; le manifeste principal, lui,
+     *                        n'a jamais de section vide.
+     */
     private static void validate(
-            DeityCubeManifest manifest
+            DeityCubeManifest manifest,
+            boolean allowEmptyFiles
     ) throws IOException {
 
         requireText(
@@ -161,7 +169,7 @@ public final class DeityCubeManifestReader {
         );
 
         if (manifest.getCommon().getFiles() == null
-                || manifest.getCommon().getFiles().isEmpty()) {
+                || (!allowEmptyFiles && manifest.getCommon().getFiles().isEmpty())) {
 
             throw new IOException(
                     "Champ 'common.files' absent ou vide "
@@ -207,7 +215,7 @@ public final class DeityCubeManifestReader {
             );
 
             if (pack.getFiles() == null
-                    || pack.getFiles().isEmpty()) {
+                    || (!allowEmptyFiles && pack.getFiles().isEmpty())) {
 
                 throw new IOException(
                         "Champ 'profiles."

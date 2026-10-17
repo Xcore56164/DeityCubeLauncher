@@ -203,6 +203,11 @@ public final class DeityCubePackageInstaller {
         Set<String> roots =
                 new HashSet<>();
 
+        // mods/ est toujours géré par le launcher, même quand le manifeste n'y liste plus rien :
+        // sinon le dernier mod retiré du modpack test resterait installé chez les testeurs. Sans
+        // effet sur le modpack principal, qui a toujours des mods.
+        roots.add("mods");
+
         collectRoots(
                 manifest.getCommon().getFiles(),
                 roots

@@ -1,5 +1,6 @@
 package fr.deitycube.launcher.deitycube;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.deitycube.launcher.filesystem.GameDirectory;
 import fr.deitycube.launcher.util.HashUtils;
 import org.junit.jupiter.api.Test;
@@ -62,6 +63,36 @@ class DeityCubePackageInstallerTest {
 
         assertTrue(Files.isRegularFile(mainMod));
         assertTrue(Files.isRegularFile(mainConfig));
+    }
+
+    @Test
+    void lastModRemovedFromTestIsDeleted() throws IOException {
+
+        Path gameTest = root.resolve("game-test");
+        Path removedMod = write(gameTest.resolve("mods/deitycube-0.2.0.jar"), "ancien");
+        Path options = write(gameTest.resolve("options.txt"), "réglages du joueur");
+
+        // Plus aucun mod en test : manifeste généré par le site avec des listes vides.
+        DeityCubeManifest manifest = DeityCubeManifestReader.readTestManifest(
+                new ObjectMapper().readTree("""
+                        {
+                          "modpack_version": "test-20261017-130000",
+                          "minecraft_version": "1.21.1",
+                          "neoforge_version": "21.1.216",
+                          "common": {"base_url": "https://deitycube.fr/downloads/test/common/", "files": []},
+                          "profiles": {"test": {"name": "Serveur test", "version": "test-20261017-130000",
+                                       "base_url": "https://deitycube.fr/downloads/test/profile/", "files": []}},
+                          "server": "deitycube.fr:25566"
+                        }
+                        """),
+                "deitycube.fr"
+        );
+
+        new DeityCubePackageInstaller(gameTest, Map.of())
+                .install(manifest, manifest.getProfiles().get("test"));
+
+        assertFalse(Files.exists(removedMod));
+        assertTrue(Files.isRegularFile(options));
     }
 
     @Test

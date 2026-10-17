@@ -133,4 +133,64 @@ class DeityCubeManifestReaderTest {
                 HOST
         ));
     }
+
+    /** Manifeste tel que l'écrit deitycube-mod sur le VPS : profil "test" sans fichiers propres. */
+    private static String siteTestManifest(String commonFiles) {
+
+        return """
+                {
+                  "modpack_version": "test-20261017-120000",
+                  "minecraft_version": "1.21.1",
+                  "neoforge_version": "21.1.216",
+                  "common": {
+                    "base_url": "https://deitycube.fr/downloads/test/common/",
+                    "files": [%s]
+                  },
+                  "profiles": {
+                    "test": {
+                      "name": "Serveur test",
+                      "version": "test-20261017-120000",
+                      "base_url": "https://deitycube.fr/downloads/test/profile/",
+                      "files": []
+                    }
+                  },
+                  "server": "deitycube.fr:25566"
+                }
+                """.formatted(commonFiles);
+    }
+
+    @Test
+    void acceptsSiteTestManifestWithEmptyTestProfile() throws IOException {
+
+        DeityCubeManifest manifest = DeityCubeManifestReader.readTestManifest(
+                json(siteTestManifest(
+                        "{\"path\": \"mods/deitycube-0.2.0.jar\", \"sha256\": \"aa\", \"size\": 2}"
+                )),
+                HOST
+        );
+
+        assertEquals(1, manifest.getCommon().getFiles().size());
+        assertTrue(manifest.getProfiles().get("test").getFiles().isEmpty());
+        assertEquals("deitycube.fr:25566", manifest.getServer());
+    }
+
+    @Test
+    void acceptsEmptyTestModpack() throws IOException {
+
+        // Plus aucun mod en test : NeoForge seul.
+        DeityCubeManifest manifest = DeityCubeManifestReader.readTestManifest(
+                json(siteTestManifest("")),
+                HOST
+        );
+
+        assertTrue(manifest.getCommon().getFiles().isEmpty());
+    }
+
+    @Test
+    void mainManifestStillRequiresFiles() {
+
+        assertThrows(IOException.class, () -> DeityCubeManifestReader.parse(
+                siteTestManifest("")
+        ));
+    }
 }
